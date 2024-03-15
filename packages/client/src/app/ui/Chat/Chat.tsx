@@ -14,6 +14,7 @@ import { addressToEntityID } from "../../../mud/setupNetwork";
 import { BYTES32_ZERO } from "../../../constants";
 import { getBurnerWallet } from "../../../mud/getBrowserNetworkConfig";
 import { ClickWrapper } from "../Theme/ClickWrapper";
+import { useAllPlayerDetails } from "../hooks/usePlayerDetails";
 
 type Message = { id: string; address: string; content: string; color: string; name: string; timestamp: number };
 type Chatter = { id: string; address: string; key: string; };
@@ -74,6 +75,7 @@ export function Chat() {
   } = useMUD();
 
   const externalWalletClient = useExternalAccount();
+  const playerData = useAllPlayerDetails(matchEntity ?? ("" as Entity));
   const currentPlayer = useCurrentPlayer(matchEntity ?? ("" as Entity));
 
   const randomWallet = useMemo(() => Wallet.createRandom(), []);
@@ -96,24 +98,18 @@ export function Chat() {
   });
 
   const [ initialized, setInitialized ] = useState<boolean>(false);
-  // TODO: Make enum, Channels.ALL, Channels.PLAYER
   const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
+  
 
   useEffect(() => {
     if (!app || initialized || chatters === null) return
 
-    // console.log('initialized :>> ', initialized);
-
     const sessionWalletPrivateKey = getBurnerWallet(); 
     const encryptionKey = getEncryptionPublicKey(sessionWalletPrivateKey.slice(2))
-
-    // console.log('chatters :>> ', chatters);
 
     const matchingChatters = chatters.filter((chatter: Chatter) => {
       return (chatter.key === encryptionKey)
     });
-
-    // console.log('matchingChatters :>> ', matchingChatters);
 
     if (matchingChatters.length > 0) {
       console.log('a key was matched');
@@ -171,6 +167,24 @@ export function Chat() {
     scrollIntoViewRef.current?.scrollIntoView();
   }, [blurInput, lastInteraction, now]);
 
+  const getPlayerName = useCallback(() => {
+    // We think the user is a spectator
+    if (!currentPlayer.player) {
+      return 'Spectator';
+    }
+
+    const currentPlayerData = playerData.find((pd: any) => pd.player === currentPlayer.player);
+
+    if (currentPlayerData) {
+      return currentPlayerData.name;
+    }
+
+    // default to 'Spectator' if we don't know
+    return 'Spectator';
+  }, [currentPlayer, playerData]);
+
+  console.log('currentPlayer :>> ', currentPlayer);
+
   const sendMessage = useCallback(async () => {
     if (!app) return;
     if (newMessage.length === 0) {
@@ -178,10 +192,7 @@ export function Chat() {
       return;
     }
 
-    const mainWalletAddressEntity = externalWalletClient.address
-      ? addressToEntityID(externalWalletClient.address)
-      : (BYTES32_ZERO as Entity);
-    const name = getComponentValue(Name, mainWalletAddressEntity)?.value ?? "Spectator";
+    const name = getPlayerName();
 
     try {
       setNewMessage("");
