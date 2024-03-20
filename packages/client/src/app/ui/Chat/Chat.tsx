@@ -2,22 +2,40 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Contract } from "@canvas-js/core";
 import { SIWESigner } from "@canvas-js/chain-ethereum";
 import { useLiveQuery, useCanvas } from "@canvas-js/hooks";
-import { encryptSafely, decryptSafely, getEncryptionPublicKey, EthEncryptedData } from "@metamask/eth-sig-util"
 import { useMUD } from "../../../useMUD";
 import { useCurrentPlayer } from "../hooks/useCurrentPlayer";
-import { Entity, getComponentValue } from "@latticexyz/recs";
+import { Entity } from "@latticexyz/recs";
 import { Wallet } from "ethers";
 import { useCurrentTime } from "../../amalgema-ui/hooks/useCurrentTime";
 import { DateTime } from "luxon";
 import { useExternalAccount } from "../hooks/useExternalAccount";
-import { addressToEntityID } from "../../../mud/setupNetwork";
-import { BYTES32_ZERO } from "../../../constants";
 import { getBurnerWallet } from "../../../mud/getBrowserNetworkConfig";
 import { ClickWrapper } from "../Theme/ClickWrapper";
 import { useAllPlayerDetails } from "../hooks/usePlayerDetails";
+import * as secp256k1 from '@noble/secp256k1';
+import { sha256 } from '@noble/hashes/sha256';
+import { gcm } from '@noble/ciphers/aes';
+import { bytesToHex, hexToBytes, utf8ToBytes, bytesToUtf8 } from '@noble/ciphers/utils';
+import { randomBytes } from "@noble/hashes/utils";
 
-type Message = { id: string; address: string; content: string; color: string; name: string; timestamp: number };
-type Chatter = { id: string; address: string; key: string; };
+type Message = { 
+  id: string; 
+  address: string; 
+  content: string; 
+  channel: string;
+  color: string; 
+  name: string;
+  nonce: string;
+  player: string;
+  timestamp: number 
+};
+
+type Player = { 
+  id: string;
+  address: string;
+  key: string;
+  player: string
+};
 
 enum CHANNELS {
   ALL = 'All',
@@ -34,25 +52,28 @@ const createContract = (matchEntity: Entity) => {
         name: "string",
         color: "string",
         content: "string",
+        nonce: "string",
         timestamp: "integer",
+        player: "string",
         channel: "string",
         $indexes: ["user", "timestamp"],
       },
-      chatters: {
+      players: {
         id: "primary",
         address: "string",
+        player: "string",
         key: "string"
       },
     },
 
     actions: {
-      async createMessage(db, { content, name, color, channel }, { id, address, timestamp }) {
-        await db.set("message", { id, address, content, name, color, timestamp, channel });
+      async createMessage(db, { content, name, color, channel, player, nonce }, { id, address, timestamp }) {
+        await db.set("message", { id, address, content, name, color, timestamp, channel, player, nonce });
       },
 
-      async createChatter(db, { key }, { id, address }) {
-        console.log('creating chatter, key: ', key, ' address: ', address);
-        await db.set("chatters", { id, address, key });
+      async createPlayer(db, { key, player }, { id, address }) {
+        console.log('creating player, key: ', key, ' address: ', address);
+        await db.set("players", { id, address, key, player });
       }
     },
   } as Contract;
@@ -77,6 +98,9 @@ export function Chat() {
   const externalWalletClient = useExternalAccount();
   const playerData = useAllPlayerDetails(matchEntity ?? ("" as Entity));
   const currentPlayer = useCurrentPlayer(matchEntity ?? ("" as Entity));
+  const otherPlayer = playerData.find((pd: any) => pd.player !== currentPlayer.player);
+
+  const [secret, setSecret] = useState<Uint8Array>([]);
 
   const randomWallet = useMemo(() => Wallet.createRandom(), []);
   const contract = useMemo(() => createContract(matchEntity ?? ("" as Entity)), [matchEntity]);
@@ -93,40 +117,38 @@ export function Chat() {
     ],
   });
 
-  const chatters = useLiveQuery<Chatter>(app, "chatters", {
+  const players = useLiveQuery<Player>(app, "players", {
     orderBy: { address: "asc" },
   });
 
   const [ initialized, setInitialized ] = useState<boolean>(false);
   const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
-  
 
   useEffect(() => {
-    if (!app || initialized || chatters === null) return
+    if (!app || initialized || players === null) return
 
-    const sessionWalletPrivateKey = getBurnerWallet(); 
-    const encryptionKey = getEncryptionPublicKey(sessionWalletPrivateKey.slice(2))
+    const sessionWalletPrivateKey = getBurnerWallet();
+    const publicKey = new Wallet(sessionWalletPrivateKey).publicKey;
 
-    const matchingChatters = chatters.filter((chatter: Chatter) => {
-      return (chatter.key === encryptionKey)
+    const matchingPlayers = players.filter((player: Player) => {
+      return (player.key === publicKey)
     });
 
-    if (matchingChatters.length > 0) {
-      console.log('a key was matched');
+    if (matchingPlayers.length > 0) {
       return
     } else {
-      console.log('~~~ a key was not matched. creating one now. ~~~')
+      console.log('~~ creating player ~~')
       registerEncryptionKey();
     }
 
     setInitialized(true);
-  }, [app, chatters, initialized]);
+  }, [app, players, initialized]);
 
   const registerEncryptionKey = useCallback(async () => {
-    const sessionWalletPrivateKey = getBurnerWallet(); 
-    const encryptionKey = getEncryptionPublicKey(sessionWalletPrivateKey.slice(2))
+    const sessionWalletPrivateKey = getBurnerWallet();
+    const publicKey = new Wallet(sessionWalletPrivateKey).publicKey;
 
-    app.actions.createChatter({ key: encryptionKey});
+    app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
   }, [app]);
 
   const now = useCurrentTime();
@@ -183,7 +205,41 @@ export function Chat() {
     return 'Spectator';
   }, [currentPlayer, playerData]);
 
-  console.log('currentPlayer :>> ', currentPlayer);
+  const getEncryptedTextContent = ({ player, text }: {player: string, text: string}) => {
+    const privKey = getBurnerWallet();
+    const recipientKey = players?.find(c => c.player === player)?.key;
+
+    if (!recipientKey) return null;
+
+    const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
+
+    const aesKey = sha256(sharedSecret);
+    const nonce = randomBytes(24);
+    const aesAlgo = gcm(aesKey, nonce);
+    const ciphertext = aesAlgo.encrypt(utf8ToBytes(text));
+
+    return {
+      ciphertext: bytesToHex(ciphertext),
+      nonce: bytesToHex(nonce)
+    };
+  }
+
+  const getDecryptedTextContent = ({player, ciphertext, nonce}: {player: string, ciphertext: string, nonce: string}) => {
+
+    const privKey = getBurnerWallet();
+    const recipientKey = players?.find(c => c.player === player)?.key;
+
+    if (!recipientKey) return;
+
+    const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
+
+
+    const aesKey = sha256(sharedSecret);
+    const aesAlgo = gcm(aesKey, hexToBytes(nonce));
+    const plaintext = aesAlgo.decrypt(hexToBytes(ciphertext));
+
+    return bytesToUtf8(plaintext);
+  }
 
   const sendMessage = useCallback(async () => {
     if (!app) return;
@@ -193,20 +249,53 @@ export function Chat() {
     }
 
     const name = getPlayerName();
+    if (channel === CHANNELS.ALL) {
+      try {
+        setNewMessage("");
+        blurInput();
+  
+        await app.actions.createMessage({
+          content: newMessage,
+          name,
+          channel,
+          nonce: "N/A",
+          player: currentPlayer.player,
+          color: currentPlayer.playerColor.color.toString(16),
+        });
+        sendAnalyticsEvent("sent-message", { matchEntity });
+      } catch (err) {
+        console.error(err);
+      }
+    } 
+    
+    if (channel === CHANNELS.PLAYER) {
+      if (!otherPlayer) {
+        return;
+      }
 
-    try {
-      setNewMessage("");
-      blurInput();
+      const encryptedText = getEncryptedTextContent({ player: otherPlayer.player, text: newMessage, });
 
-      await app.actions.createMessage({
-        content: newMessage,
-        name,
-        channel: CHANNELS.ALL,
-        color: currentPlayer.playerColor.color.toString(16),
-      });
-      sendAnalyticsEvent("sent-message", { matchEntity });
-    } catch (err) {
-      console.error(err);
+      if (!encryptedText) {
+        console.log('~~ message didnt encrypt ~~');
+        return;
+      }
+
+      try {
+        setNewMessage("");
+        blurInput();
+  
+        await app.actions.createMessage({
+          content: encryptedText.ciphertext,
+          nonce: encryptedText.nonce,
+          name,
+          channel,
+          player: currentPlayer.player,
+          color: currentPlayer.playerColor.color.toString(16),
+        });
+        sendAnalyticsEvent("sent-message", { matchEntity });
+      } catch (err) {
+        console.error(err);
+      }
     }
   }, [
     Name,
@@ -224,12 +313,10 @@ export function Chat() {
       if (document.activeElement === inputRef.current) return;
 
       if (e.key === "Enter" && e.shiftKey) {
-        console.log('shift + enter opened thing');
         setChannel(CHANNELS.PLAYER);
         focusInput();
         e.preventDefault();
       } else if (e.key === "Enter") {
-        console.log('enter opened thing');
         setChannel(CHANNELS.ALL);
         focusInput();
         e.preventDefault();
@@ -290,26 +377,42 @@ export function Chat() {
           >
             <div className="grow" />
 
-            {(messages ?? []).map((message) => (
-              <li
-                style={{
-                  textShadow: "0 0 2px black",
-                  overflowWrap: "anywhere",
-                }}
-                key={message.id}
-                className="flex text-white items-baseline flex-wrap space-x-1 w-full"
-              >
-                <span
+            {(messages ?? []).map((message) => {
+              if (message.channel !== channel) return;
+
+              let textContent;
+
+              if (message.channel === CHANNELS.ALL) {
+                textContent = message.content;
+              }
+
+              if (message.channel === CHANNELS.PLAYER) {
+                const decryptedText = getDecryptedTextContent({player: otherPlayer.player, ciphertext: message.content, nonce: message.nonce});
+
+                textContent = decryptedText;
+              }
+
+              return (
+                <li
                   style={{
-                    color: message.color,
+                    textShadow: "0 0 2px black",
+                    overflowWrap: "anywhere",
                   }}
-                  className="font-bold"
+                  key={message.id}
+                  className="flex text-white items-baseline flex-wrap space-x-1 w-full"
                 >
-                  {message.name}:
-                </span>
-                <span>{message.content}</span>
-              </li>
-            ))}
+                  <span
+                    style={{
+                      color: message.color,
+                    }}
+                    className="font-bold"
+                  >
+                    {message.name}:
+                  </span>
+                  <span>{textContent}</span>
+                </li>
+              );
+            })}
             <div ref={scrollIntoViewRef} />
           </ul>
         </div>
