@@ -121,6 +121,8 @@ export function Chat() {
     orderBy: { address: "asc" },
   });
 
+  console.log('players :>> ', players);
+
   const [ initialized, setInitialized ] = useState<boolean>(false);
   const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
 
