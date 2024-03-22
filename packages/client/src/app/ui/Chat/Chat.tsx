@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import styled from "styled-components";
 import { Contract } from "@canvas-js/core";
 import { SIWESigner } from "@canvas-js/chain-ethereum";
 import { useLiveQuery, useCanvas } from "@canvas-js/hooks";
@@ -99,8 +100,6 @@ export function Chat() {
   const playerData = useAllPlayerDetails(matchEntity ?? ("" as Entity));
   const currentPlayer = useCurrentPlayer(matchEntity ?? ("" as Entity));
   const otherPlayer = playerData.find((pd: any) => pd.player !== currentPlayer.player);
-
-  const [secret, setSecret] = useState<Uint8Array>([]);
 
   const randomWallet = useMemo(() => Wallet.createRandom(), []);
   const contract = useMemo(() => createContract(matchEntity ?? ("" as Entity)), [matchEntity]);
@@ -235,7 +234,6 @@ export function Chat() {
 
     const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
 
-
     const aesKey = sha256(sharedSecret);
     const aesAlgo = gcm(aesKey, hexToBytes(nonce));
     const plaintext = aesAlgo.decrypt(hexToBytes(ciphertext));
@@ -315,7 +313,12 @@ export function Chat() {
       if (document.activeElement === inputRef.current) return;
 
       if (e.key === "Enter" && e.shiftKey) {
-        setChannel(CHANNELS.PLAYER);
+        if (!!otherPlayer) {
+          setChannel(CHANNELS.PLAYER);
+        } else {
+          setChannel(CHANNELS.ALL);
+        }
+
         focusInput();
         e.preventDefault();
       } else if (e.key === "Enter") {
@@ -332,9 +335,14 @@ export function Chat() {
     };
   }, [blurInput, focusInput]);
 
-  // TODO: Weird issue... 
-  // When you specify a value of "pl-[50px]" for a tailwind class, the JIT compiler will generate a CSS class corresponding to that specific value.
-  // But if you stick this value in a variable, the compiler misses it, and you can't arbitrarily load pixel values from variables. So we have to construct the whole class string like this.
+  const availableChannels = [
+    CHANNELS.ALL, 
+    ...(otherPlayer ? [CHANNELS.PLAYER] : [])
+  ];
+
+  /* Tailwind weirdness
+   When you specify a value of "pl-[50px]" for a tailwind class, the JIT compiler will generate a CSS class corresponding to that specific value, but if you stick this value in a variable, the compiler misses it, and you can't arbitrarily load pixel values from variables. So we have to construct the whole class string like this.
+  */
   const getInputClass = () => {
     if (channel === CHANNELS.ALL) {
       return `w-full outline-none px-2 pl-[46px] text-white py-1 bg-black/70 opacity-0 focus:opacity-100 border border-ss-stroke rounded`
@@ -356,19 +364,19 @@ export function Chat() {
       }}
       className="absolute bottom-12 pb-[37px] left-0 h-[300px] w-[300px] rounded border border-ss-stroke bg-black/25 transition-all duration-300"
     >
-      <div className="channel-tabs">
-        {[CHANNELS.ALL, CHANNELS.PLAYER].map((channelOption) => (
+      <ChannelTabs>
+        {availableChannels.map((channelOption) => (
           <ClickWrapper>
-            <button
+            <ChannelTab
               key={channelOption}
-              className={`channel-tab ${channel === channelOption ? 'active' : ''}`}
+              style={{ ...(channel === channelOption && { backgroundColor: '#4A76A8' }) }}
               onClick={() => setChannel(channel)}
             >
               {channelOption}
-            </button>
+            </ChannelTab>
           </ClickWrapper>
         ))}
-      </div>
+      </ChannelTabs>
       <div className="h-full w-full">
         <div className="w-full overflow-y-auto">
           <ul
@@ -466,3 +474,22 @@ export function Chat() {
     </div>
   );
 }
+
+const ChannelTabs = styled.div`
+  display: flex;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+  border-radius: 8px;
+  gap: 4px;
+  font-size: 12px;
+`;
+
+const ChannelTab = styled.button`
+  padding: 6px 12px;
+  cursor: pointer;
+  color: white;
+  border-radius: 4px;
+
+  width: 100%;
+`;
+
