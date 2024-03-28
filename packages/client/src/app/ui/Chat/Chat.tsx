@@ -56,7 +56,7 @@ const createContract = (matchEntity: Entity) => {
         nonce: "string",
         timestamp: "integer",
         player: "string",
-        channel: "string",
+        channel: "string", // if CHANNELS.Player, messages in 'content' field will be encrypted ciphertext
         $indexes: ["user", "timestamp"],
       },
       players: {
@@ -69,12 +69,17 @@ const createContract = (matchEntity: Entity) => {
 
     actions: {
       async createMessage(db, { content, name, color, channel, player, nonce }, { id, address, timestamp }) {
+        console.log('creating message, key: ', player, ' address: ', address);
         await db.set("message", { id, address, content, name, color, timestamp, channel, player, nonce });
       },
 
       async createPlayer(db, { key, player }, { id, address }) {
         console.log('creating player, key: ', key, ' address: ', address);
         await db.set("players", { id, address, key, player });
+      },
+
+      async ping() {
+        console.log('ping');
       }
     },
   } as Contract;
@@ -120,13 +125,41 @@ export function Chat() {
     orderBy: { address: "asc" },
   });
 
-  console.log('players :>> ', players);
-
   const [ initialized, setInitialized ] = useState<boolean>(false);
   const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
 
+  console.log('players :>> ', players);
+  console.log('app.status :>> ', app?.status);
+
   useEffect(() => {
+    registerEncryptionKey();
+  }, [app, initialized, players]);
+
+  const registerKeyUnlocked = () => {
+    console.log('object :>> ', app);
+    if (!app) return;
+    const sessionWalletPrivateKey = getBurnerWallet();
+    const publicKey = new Wallet(sessionWalletPrivateKey).publicKey;
+    app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
+  }
+
+  const sendPing = () => {
+    if (!app) return;
+    app.actions.ping({});
+  }
+
+  const registerEncryptionKey = () => {
+    console.log('app :>> ', app);
+    console.log('players ~~~ :>> ', players);
+    console.log('currentPlayer.player :>> ', currentPlayer.player);
+
+    if (!!app) {
+      // app.actions.ping({});
+    }
+
     if (!app || initialized || players === null) return
+
+    console.log('registering encryption key 2');
 
     const sessionWalletPrivateKey = getBurnerWallet();
     const publicKey = new Wallet(sessionWalletPrivateKey).publicKey;
@@ -135,22 +168,18 @@ export function Chat() {
       return (player.key === publicKey)
     });
 
+    // if player has registered key already, don't register again
     if (matchingPlayers.length > 0) {
       return
-    } else {
-      console.log('~~ creating player ~~')
-      registerEncryptionKey();
     }
 
+    console.log('~~ creating player ~~')
     setInitialized(true);
-  }, [app, players, initialized]);
-
-  const registerEncryptionKey = useCallback(async () => {
-    const sessionWalletPrivateKey = getBurnerWallet();
-    const publicKey = new Wallet(sessionWalletPrivateKey).publicKey;
-
     app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
-  }, [app]);
+  };
+
+  // const sessionWalletPrivateKey = getBurnerWallet();
+  // console.log('sessionWalletPrivateKey :>> ', sessionWalletPrivateKey);
 
   const now = useCurrentTime();
   const secondsVisibleAfterInteraction = 15;
@@ -232,6 +261,8 @@ export function Chat() {
 
     if (!recipientKey) return;
 
+    console.log('private key :>> ', privKey.slice(2));
+
     const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
 
     const aesKey = sha256(sharedSecret);
@@ -276,7 +307,7 @@ export function Chat() {
       const encryptedText = getEncryptedTextContent({ player: otherPlayer.player, text: newMessage, });
 
       if (!encryptedText) {
-        console.log('~~ message didnt encrypt ~~');
+        console.log('[canvas] Encryption error; message failed to encrypt/decrypt');
         return;
       }
 
@@ -313,6 +344,7 @@ export function Chat() {
       if (document.activeElement === inputRef.current) return;
 
       if (e.key === "Enter" && e.shiftKey) {
+        // registerEncryptionKey();
         if (!!otherPlayer) {
           setChannel(CHANNELS.PLAYER);
         } else {
@@ -322,6 +354,7 @@ export function Chat() {
         focusInput();
         e.preventDefault();
       } else if (e.key === "Enter") {
+        // registerEncryptionKey();
         setChannel(CHANNELS.ALL);
         focusInput();
         e.preventDefault();
@@ -377,6 +410,22 @@ export function Chat() {
           </ClickWrapper>
         ))}
       </ChannelTabs>
+      <ClickWrapper>
+        <ChannelTab
+          style={{ backgroundColor: 'red' }}
+          onClick={() => registerKeyUnlocked()}
+        >
+          Register Key
+        </ChannelTab>
+      </ClickWrapper> 
+      <ClickWrapper>
+        <ChannelTab
+          style={{ backgroundColor: 'green' }}
+          onClick={() => sendPing()}
+        >
+          Send Ping
+        </ChannelTab>
+      </ClickWrapper> 
       <div className="h-full w-full">
         <div className="w-full overflow-y-auto">
           <ul
