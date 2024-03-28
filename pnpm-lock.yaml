@@ -11,6 +11,9 @@ importers:
 
   .:
     dependencies:
+      run-pty:
+        specifier: ^5.0.0
+        version: 5.0.0
       wait-port:
         specifier: 1.0.4
         version: 1.0.4
@@ -3908,7 +3911,7 @@ packages:
     dependencies:
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       jest-mock: 29.7.0
     dev: false
 
@@ -3918,7 +3921,7 @@ packages:
     dependencies:
       '@jest/types': 29.6.3
       '@sinonjs/fake-timers': 10.3.0
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       jest-message-util: 29.7.0
       jest-mock: 29.7.0
       jest-util: 29.7.0
@@ -3937,7 +3940,7 @@ packages:
     dependencies:
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       '@types/yargs': 15.0.19
       chalk: 4.1.2
     dev: false
@@ -3949,7 +3952,7 @@ packages:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       '@types/yargs': 17.0.32
       chalk: 4.1.2
     dev: false
@@ -4920,6 +4923,56 @@ packages:
     resolution: {integrity: sha512-QuTgnG52Poic7uM1AN5yJ09QMe0O28e10XzSvWDz02TJiiKee4stsiownEIadWm8nYzyDAyT+gKzUoZmiWQtsQ==}
     dependencies:
       '@lit-labs/ssr-dom-shim': 1.1.1
+    dev: false
+
+  /@lydell/node-pty-darwin-arm64@1.0.1:
+    resolution: {integrity: sha512-DtZOmuKQDSSya2Q7PCrzysd4Um5XKYYD4n8pWuaw8yi1unf9rLkPIxO3D/jIbxwttVhk1uN9H2dz3oU8uIzrRQ==}
+    cpu: [arm64]
+    os: [darwin]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@lydell/node-pty-darwin-x64@1.0.1:
+    resolution: {integrity: sha512-VEkPOKVhmuh4HNaXY3M2N089c+kW2wCOWW9teeR/zKYtTDl+7RPhYAgbhRUn0OM0QBchp45IRYCBLpsC7KnHqA==}
+    cpu: [x64]
+    os: [darwin]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@lydell/node-pty-linux-x64@1.0.1:
+    resolution: {integrity: sha512-HOPx63Gi2CoyUe+Q9jYYRuvbzi7PuiUrFfDSDHlQ725e+3SVbE2ZOT/6uU85+PDV0wHg/C8cN3JDe5pLyzBkuw==}
+    cpu: [x64]
+    os: [linux]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@lydell/node-pty-win32-arm64@1.0.1:
+    resolution: {integrity: sha512-auCh7jHuO/BvLogkdYOQxpuiMY4izGQ7LWqeUlG96hdWBlcpWfgFEbRpY3KBN4UlncK+A7mdE81WpA6Gz3I06A==}
+    cpu: [arm64]
+    os: [win32]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@lydell/node-pty-win32-x64@1.0.1:
+    resolution: {integrity: sha512-jLFrTiqv1zXeJe5Ql5r/kTb/PAFf+4y8o2FhWsZecl2lX5y11zWmZFh2wJ3/YD5l1OhEa9X9/XigrfAGYSammw==}
+    cpu: [x64]
+    os: [win32]
+    requiresBuild: true
+    dev: false
+    optional: true
+
+  /@lydell/node-pty@1.0.1:
+    resolution: {integrity: sha512-Z/Gj+xizFU7WF5aMsBd8iBt0BfoqkgKz5w7g7pgUCxhoDDrtil1OA2MimbcEIh20KJFjanbf/QXERwKIHuybEQ==}
+    optionalDependencies:
+      '@lydell/node-pty-darwin-arm64': 1.0.1
+      '@lydell/node-pty-darwin-x64': 1.0.1
+      '@lydell/node-pty-linux-x64': 1.0.1
+      '@lydell/node-pty-win32-arm64': 1.0.1
+      '@lydell/node-pty-win32-x64': 1.0.1
     dev: false
 
   /@mapeditor/tiled-api@1.10.1:
@@ -8482,7 +8535,7 @@ packages:
     engines: {node: '>=12.13.0'}
     hasBin: true
     dependencies:
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       escape-string-regexp: 4.0.0
       is-wsl: 2.2.0
       lighthouse-logger: 1.4.2
@@ -8493,7 +8546,7 @@ packages:
   /chromium-edge-launcher@1.0.0:
     resolution: {integrity: sha512-pgtgjNKZ7i5U++1g1PWv75umkHvhVTDOQIZ+sjeUX9483S7Y6MUvO0lrd7ShGlQlFHMN4SwKTCq/X8hWrbv2KA==}
     dependencies:
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       escape-string-regexp: 4.0.0
       is-wsl: 2.2.0
       lighthouse-logger: 1.4.2
@@ -11395,7 +11448,7 @@ packages:
       '@jest/environment': 29.7.0
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       jest-mock: 29.7.0
       jest-util: 29.7.0
     dev: false
@@ -11425,7 +11478,7 @@ packages:
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       jest-util: 29.7.0
     dev: false
 
@@ -11434,7 +11487,7 @@ packages:
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -11457,7 +11510,7 @@ packages:
     resolution: {integrity: sha512-eIz2msL/EzL9UFTFFx7jBTkeZfku0yUAyZZZmJ93H2TYEiroIx2PQjEXcwYtYl8zXCxb+PAmA2hLIt/6ZEkPHw==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     dependencies:
-      '@types/node': 20.8.2
+      '@types/node': 18.18.3
       jest-util: 29.7.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
@@ -14529,6 +14582,14 @@ packages:
     dependencies:
       queue-microtask: 1.2.3
 
+  /run-pty@5.0.0:
+    resolution: {integrity: sha512-0gk83+2NmrZGGPlJ88lqt0dYHvgyau/JBdRz9OqEbNyIfmbiq9E5sGCsvHdjrLoUJVh09ZX9r5rN587ACoM3vQ==}
+    hasBin: true
+    dependencies:
+      '@lydell/node-pty': 1.0.1
+      tiny-decoders: 23.0.0
+    dev: false
+
   /rxjs@6.6.7:
     resolution: {integrity: sha512-hTdwr+7yYNIT5n4AMYp85KA6yw2Va0FLa3Rguvbpa4W3I5xynaBZo41cM3XM+4Q6fRMj3sBYIR1VAmZMXYJvRQ==}
     engines: {npm: '>=2.0.0'}
@@ -15448,6 +15509,10 @@ packages:
       promise-nodeify: 3.0.1
       proxying-agent: 2.4.0
     dev: true
+
+  /tiny-decoders@23.0.0:
+    resolution: {integrity: sha512-gQB+za3EW9JN1ASDmrVl1a1I6Q/jzg4M75YLI9ToHCdCW4/9KvBTTNH4u3kFbg8e+/8Zn68VRF+ayuiPNqYAmg==}
+    dev: false
 
   /tiny-worker@2.3.0:
     resolution: {integrity: sha512-pJ70wq5EAqTAEl9IkGzA+fN0836rycEuz2Cn6yeZ6FRzlVS5IDOkFHpIoEsksPRQV34GDqXm65+OlnZqUSyK2g==}
