@@ -100,6 +100,8 @@ export function Chat() {
   const currentPlayer = useCurrentPlayer(matchEntity ?? ("" as Entity));
 
   const [otherPlayer, setOtherPlayer] = useState<Player | undefined>(undefined);
+  const [ initialized, setInitialized ] = useState<boolean>(false);
+  const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
 
   const randomWallet = useMemo(() => Wallet.createRandom(), []);
   const contract = useMemo(() => createContract(matchEntity ?? ("" as Entity)), [matchEntity]);
@@ -119,9 +121,6 @@ export function Chat() {
   const players = useLiveQuery<Player>(app, "players", {
     orderBy: { address: "asc" },
   });
-
-  const [ initialized, setInitialized ] = useState<boolean>(false);
-  const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
 
   /*
     We need to wait for Canvas to finish initializing and connecting to peers before we register encryption keys, so we wait for `app.status === 'connected'` before doing any loading stage operations
@@ -155,7 +154,6 @@ export function Chat() {
     2) `players` shows that user has joined and registered an encryption key
   */ 
   useEffect(() => {
-
     // if other player has been set already, return
     if (!!otherPlayer || !initialized) {
       return;
@@ -222,24 +220,19 @@ export function Chat() {
   }, [blurInput, lastInteraction, now]);
 
   const getPlayerName = useCallback(() => {
-    // We think the user is a spectator
-    if (!currentPlayer.player) {
-      return 'Spectator';
-    }
-
-    const currentPlayerData = playerData.find((pd: any) => pd.player === currentPlayer.player);
+    const currentPlayerData = playerData.find((pd: any) => pd.player === currentPlayer?.player);
 
     if (currentPlayerData) {
       return currentPlayerData.name;
     }
 
-    // default to 'Spectator' if we don't know
+    // default to 'Spectator' if current player isn't found
     return 'Spectator';
   }, [currentPlayer, playerData]);
 
-  const getEncryptedTextContent = ({ player, text }: {player: string, text: string}) => {
+  const getEncryptedTextContent = ({ text }: { text: string }) => {
     const privKey = getBurnerWallet();
-    const recipientKey = players?.find(c => c.player === player)?.key;
+    const recipientKey = otherPlayer?.key;
 
     if (!recipientKey) return null;
 
@@ -263,7 +256,6 @@ export function Chat() {
   }
 
   const getDecryptedTextContent = ({ciphertext, nonce}: {ciphertext: string, nonce: string}) => {
-
     const privKey = getBurnerWallet();
     const recipientKey = otherPlayer?.key;
 
@@ -316,7 +308,7 @@ export function Chat() {
         return;
       }
 
-      const encryptedText = getEncryptedTextContent({ player: otherPlayer.player, text: newMessage, });
+      const encryptedText = getEncryptedTextContent({ text: newMessage });
 
       if (!encryptedText) {
         return;
@@ -382,9 +374,7 @@ export function Chat() {
     ...(otherPlayer ? [CHANNELS.PLAYER] : [])
   ];
 
-  /* Tailwind weirdness
-   When you specify a value of "pl-[50px]" for a tailwind class, the JIT compiler will generate a CSS class corresponding to that specific value, but if you stick this value in a variable, the compiler misses it, and you can't arbitrarily load pixel values from variables. So we have to construct the whole class string like this.
-  */
+  // Tailwind can't interpolate variables in class strings, so we need to switch the whole class string here for the pl-* values.
   const getInputClass = () => {
     if (channel === CHANNELS.ALL) {
       return `w-full outline-none px-2 pl-[46px] text-white py-1 bg-black/70 opacity-0 focus:opacity-100 border border-ss-stroke rounded`
@@ -393,13 +383,14 @@ export function Chat() {
     if (channel === CHANNELS.PLAYER) {
       return `w-full outline-none px-2 pl-[74px] text-white py-1 bg-black/70 opacity-0 focus:opacity-100 border border-ss-stroke rounded`
     }
+
+    return '';
   }
 
   return (
     <div
       style={{
-        // opacity: lastInteraction.plus({ seconds: secondsVisibleAfterInteraction }).diff(now).milliseconds > 0 ? 1 : 0,
-        opacity: 1
+        opacity: lastInteraction.plus({ seconds: secondsVisibleAfterInteraction }).diff(now).milliseconds > 0 ? 1 : 0,
       }}
       onMouseMove={() => {
         setLastInteraction(DateTime.now());
@@ -429,7 +420,7 @@ export function Chat() {
           >
             <div className="grow" />
 
-            {(messages ?? []).map((message) => {
+            {(messages ?? []).map((message: Message) => {
               if (message.channel !== channel) return;
 
               let textContent;
