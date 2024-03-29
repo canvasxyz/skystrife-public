@@ -126,14 +126,13 @@ export function Chat() {
   const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
 
   console.log('app?.status :>> ', app?.status);
+  console.log('players :>> ', players);
 
   /*
     We need to wait for Canvas to finish initializing and connecting to peers before we register encryption keys, so we wait for `app.status === 'connected'` before doing any loading stage operations
   */ 
   useEffect(() => {
-    if (app && app.status === 'connected' && !initialized) {
-      setInitialized(true);
-    } else {
+    if (!app || app.status !== 'connected' || initialized) {
       return;
     }
 
@@ -148,6 +147,7 @@ export function Chat() {
     // if not, create one 
     if (!hasRegistrationKey) {
       app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
+      setInitialized(true);
     }
 
   }, [app, app?.status, initialized, players])
