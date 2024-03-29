@@ -69,12 +69,10 @@ const createContract = (matchEntity: Entity) => {
 
     actions: {
       async createMessage(db, { content, name, color, channel, player, nonce }, { id, address, timestamp }) {
-        console.log('creating message, key: ', player, ' address: ', address);
         await db.set("message", { id, address, content, name, color, timestamp, channel, player, nonce });
       },
 
       async createPlayer(db, { key, player }, { id, address }) {
-        console.log('creating player, key: ', key, ' address: ', address);
         await db.set("players", { id, address, key, player });
       },
     },
@@ -125,9 +123,6 @@ export function Chat() {
   const [ initialized, setInitialized ] = useState<boolean>(false);
   const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
 
-  console.log('app?.status :>> ', app?.status);
-  console.log('players :>> ', players);
-
   /*
     We need to wait for Canvas to finish initializing and connecting to peers before we register encryption keys, so we wait for `app.status === 'connected'` before doing any loading stage operations
   */ 
@@ -147,8 +142,9 @@ export function Chat() {
     // if not, create one 
     if (!hasRegistrationKey) {
       app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
-      setInitialized(true);
     }
+
+    setInitialized(true);
 
   }, [app, app?.status, initialized, players])
 
@@ -159,22 +155,17 @@ export function Chat() {
     2) `players` shows that user has joined and registered an encryption key
   */ 
   useEffect(() => {
-    console.log('~~ user detection :>> ');
 
     // if other player has been set already, return
     if (!!otherPlayer || !initialized) {
       return;
     }
 
-    console.log('~~ user detection :>> 2');
-
     const pdPlayer = playerData.find((pd: any) => pd.player !== currentPlayer.player);
 
     if (!pdPlayer) {
       return;
     }
-
-    console.log('~~ user detection :>> other player has joined');
 
     // find pdPlayer's encryption key in the Canvas store 
     const pPlayer = players?.find((c: Player) => c.player === pdPlayer.player);
@@ -183,24 +174,14 @@ export function Chat() {
       return;
     }
 
-    console.log('~~ user detection :>> other player has registered');
-
     // if match player exist and key has been registered, set the otherPlayer state variable, which means we're ready for chatting
-
-    console.log('otherPlayerRegistered :>> ', pPlayer);
-
     setOtherPlayer({
       id: "N/A",
       address: "N/A",
       player: pdPlayer.player,
       key: pPlayer.key,
     });
-
-    console.log('~~ user detection :>> other player set');
-
   }, [playerData, players, otherPlayer, initialized])
-
-  console.log('players :>> ', players);
 
   const now = useCurrentTime();
   const secondsVisibleAfterInteraction = 15;
@@ -260,9 +241,6 @@ export function Chat() {
     const privKey = getBurnerWallet();
     const recipientKey = players?.find(c => c.player === player)?.key;
 
-    console.log('recipientKey :>> ', recipientKey);
-    console.log('otherPlayer :>> ', otherPlayer);
-
     if (!recipientKey) return null;
 
     try {
@@ -289,23 +267,14 @@ export function Chat() {
     const privKey = getBurnerWallet();
     const recipientKey = otherPlayer?.key;
 
-    console.log('recipientKey :>> ', recipientKey);
-    console.log('otherPlayer :>> ', otherPlayer);
-
     if (!recipientKey) return;
 
     try {
-
-      console.log('trying');
       const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
-
-      console.log('sharedSecret :>> ', sharedSecret);
   
       const aesKey = sha256(sharedSecret);
       const aesAlgo = gcm(aesKey, hexToBytes(nonce));
       const plaintext = aesAlgo.decrypt(hexToBytes(ciphertext));
-  
-      console.log('plaintext :>> ', plaintext);
 
       return bytesToUtf8(plaintext);
     } catch (err) {
@@ -406,7 +375,7 @@ export function Chat() {
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [blurInput, focusInput]);
+  }, [blurInput, focusInput, otherPlayer]);
 
   const availableChannels = [
     CHANNELS.ALL, 
