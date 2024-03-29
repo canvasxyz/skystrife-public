@@ -177,9 +177,9 @@ export function Chat() {
     console.log('~~ user detection :>> other player has joined');
 
     // find pdPlayer's encryption key in the Canvas store 
-    const otherPlayerRegistered = players?.some((c: Player) => c.player === pdPlayer.player);
+    const pPlayer = players?.find((c: Player) => c.player === pdPlayer.player);
 
-    if (!otherPlayerRegistered) {
+    if (!pPlayer) {
       return;
     }
 
@@ -187,11 +187,13 @@ export function Chat() {
 
     // if match player exist and key has been registered, set the otherPlayer state variable, which means we're ready for chatting
 
+    console.log('otherPlayerRegistered :>> ', pPlayer);
+
     setOtherPlayer({
       id: "N/A",
       address: "N/A",
       player: pdPlayer.player,
-      key: otherPlayerRegistered.key,
+      key: pPlayer.key,
     });
 
     console.log('~~ user detection :>> other player set');
@@ -258,6 +260,9 @@ export function Chat() {
     const privKey = getBurnerWallet();
     const recipientKey = players?.find(c => c.player === player)?.key;
 
+    console.log('recipientKey :>> ', recipientKey);
+    console.log('otherPlayer :>> ', otherPlayer);
+
     if (!recipientKey) return null;
 
     try {
@@ -284,15 +289,24 @@ export function Chat() {
     const privKey = getBurnerWallet();
     const recipientKey = otherPlayer?.key;
 
+    console.log('recipientKey :>> ', recipientKey);
+    console.log('otherPlayer :>> ', otherPlayer);
+
     if (!recipientKey) return;
 
     try {
+
+      console.log('trying');
       const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
+
+      console.log('sharedSecret :>> ', sharedSecret);
   
       const aesKey = sha256(sharedSecret);
       const aesAlgo = gcm(aesKey, hexToBytes(nonce));
       const plaintext = aesAlgo.decrypt(hexToBytes(ciphertext));
   
+      console.log('plaintext :>> ', plaintext);
+
       return bytesToUtf8(plaintext);
     } catch (err) {
       console.log(err);
@@ -538,7 +552,7 @@ const ChannelTabs = styled.div`
   display: flex;
   padding: 4px;
   background: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
-  border-radius: 8px;
+  border-radius: 4px 4px 0px 0px;
   gap: 4px;
   font-size: 12px;
 `;
