@@ -77,10 +77,6 @@ const createContract = (matchEntity: Entity) => {
         console.log('creating player, key: ', key, ' address: ', address);
         await db.set("players", { id, address, key, player });
       },
-
-      async ping() {
-        console.log('ping');
-      }
     },
   } as Contract;
 
@@ -104,7 +100,8 @@ export function Chat() {
   const externalWalletClient = useExternalAccount();
   const playerData = useAllPlayerDetails(matchEntity ?? ("" as Entity));
   const currentPlayer = useCurrentPlayer(matchEntity ?? ("" as Entity));
-  const otherPlayer = playerData.find((pd: any) => pd.player !== currentPlayer.player);
+
+  const [otherPlayer, setOtherPlayer] = useState<Player | undefined>(undefined);
 
   const randomWallet = useMemo(() => Wallet.createRandom(), []);
   const contract = useMemo(() => createContract(matchEntity ?? ("" as Entity)), [matchEntity]);
@@ -128,58 +125,80 @@ export function Chat() {
   const [ initialized, setInitialized ] = useState<boolean>(false);
   const [ channel, setChannel ] = useState<string>(CHANNELS.ALL);
 
-  console.log('players :>> ', players);
-  console.log('app.status :>> ', app?.status);
+  console.log('app?.status :>> ', app?.status);
 
+  /*
+    We need to wait for Canvas to finish initializing and connecting to peers before we register encryption keys, so we wait for `app.status === 'connected'` before doing any loading stage operations
+  */ 
   useEffect(() => {
-    registerEncryptionKey();
-  }, [app, initialized, players]);
-
-  const registerKeyUnlocked = () => {
-    console.log('object :>> ', app);
-    if (!app) return;
-    const sessionWalletPrivateKey = getBurnerWallet();
-    const publicKey = new Wallet(sessionWalletPrivateKey).publicKey;
-    app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
-  }
-
-  const sendPing = () => {
-    if (!app) return;
-    app.actions.ping({});
-  }
-
-  const registerEncryptionKey = () => {
-    console.log('app :>> ', app);
-    console.log('players ~~~ :>> ', players);
-    console.log('currentPlayer.player :>> ', currentPlayer.player);
-
-    if (!!app) {
-      // app.actions.ping({});
+    if (app && app.status === 'connected' && !initialized) {
+      setInitialized(true);
+    } else {
+      return;
     }
 
-    if (!app || initialized || players === null) return
-
-    console.log('registering encryption key 2');
-
+    // check if user has registered an encryption key
     const sessionWalletPrivateKey = getBurnerWallet();
     const publicKey = new Wallet(sessionWalletPrivateKey).publicKey;
 
-    const matchingPlayers = players.filter((player: Player) => {
-      return (player.key === publicKey)
+    const hasRegistrationKey = players?.some((player: Player) => {
+      return (currentPlayer.player === player.player)
     });
 
-    // if player has registered key already, don't register again
-    if (matchingPlayers.length > 0) {
-      return
+    // if not, create one 
+    if (!hasRegistrationKey) {
+      app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
     }
 
-    console.log('~~ creating player ~~')
-    setInitialized(true);
-    app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
-  };
+  }, [app, app?.status, initialized, players])
 
-  // const sessionWalletPrivateKey = getBurnerWallet();
-  // console.log('sessionWalletPrivateKey :>> ', sessionWalletPrivateKey);
+  /* 
+    We need to determine when another player has joined and is ready to start direct messaging. Two things here:
+
+    1) `playerData` shows that another user has joined the match 
+    2) `players` shows that user has joined and registered an encryption key
+  */ 
+  useEffect(() => {
+    console.log('~~ user detection :>> ');
+
+    // if other player has been set already, return
+    if (!!otherPlayer || !initialized) {
+      return;
+    }
+
+    console.log('~~ user detection :>> 2');
+
+    const pdPlayer = playerData.find((pd: any) => pd.player !== currentPlayer.player);
+
+    if (!pdPlayer) {
+      return;
+    }
+
+    console.log('~~ user detection :>> other player has joined');
+
+    // find pdPlayer's encryption key in the Canvas store 
+    const otherPlayerRegistered = players?.some((c: Player) => c.player === pdPlayer.player);
+
+    if (!otherPlayerRegistered) {
+      return;
+    }
+
+    console.log('~~ user detection :>> other player has registered');
+
+    // if match player exist and key has been registered, set the otherPlayer state variable, which means we're ready for chatting
+
+    setOtherPlayer({
+      id: "N/A",
+      address: "N/A",
+      player: pdPlayer.player,
+      key: otherPlayerRegistered.key,
+    });
+
+    console.log('~~ user detection :>> other player set');
+
+  }, [playerData, players, otherPlayer, initialized])
+
+  console.log('players :>> ', players);
 
   const now = useCurrentTime();
   const secondsVisibleAfterInteraction = 15;
@@ -241,35 +260,45 @@ export function Chat() {
 
     if (!recipientKey) return null;
 
-    const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
+    try {
+      const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
 
-    const aesKey = sha256(sharedSecret);
-    const nonce = randomBytes(24);
-    const aesAlgo = gcm(aesKey, nonce);
-    const ciphertext = aesAlgo.encrypt(utf8ToBytes(text));
-
-    return {
-      ciphertext: bytesToHex(ciphertext),
-      nonce: bytesToHex(nonce)
-    };
+      const aesKey = sha256(sharedSecret);
+      const nonce = randomBytes(24);
+      const aesAlgo = gcm(aesKey, nonce);
+      const ciphertext = aesAlgo.encrypt(utf8ToBytes(text));
+  
+      return {
+        ciphertext: bytesToHex(ciphertext),
+        nonce: bytesToHex(nonce)
+      };
+    } catch (err) {
+      console.log(err);
+      console.log('[canvas] Encryption error; message failed to encrypt/decrypt');
+      return null;
+    }
   }
 
-  const getDecryptedTextContent = ({player, ciphertext, nonce}: {player: string, ciphertext: string, nonce: string}) => {
+  const getDecryptedTextContent = ({ciphertext, nonce}: {ciphertext: string, nonce: string}) => {
 
     const privKey = getBurnerWallet();
-    const recipientKey = players?.find(c => c.player === player)?.key;
+    const recipientKey = otherPlayer?.key;
 
     if (!recipientKey) return;
 
-    console.log('private key :>> ', privKey.slice(2));
-
-    const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
-
-    const aesKey = sha256(sharedSecret);
-    const aesAlgo = gcm(aesKey, hexToBytes(nonce));
-    const plaintext = aesAlgo.decrypt(hexToBytes(ciphertext));
-
-    return bytesToUtf8(plaintext);
+    try {
+      const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
+  
+      const aesKey = sha256(sharedSecret);
+      const aesAlgo = gcm(aesKey, hexToBytes(nonce));
+      const plaintext = aesAlgo.decrypt(hexToBytes(ciphertext));
+  
+      return bytesToUtf8(plaintext);
+    } catch (err) {
+      console.log(err);
+      console.log('[canvas] Encryption error; message failed to encrypt/decrypt');
+      return null;
+    }
   }
 
   const sendMessage = useCallback(async () => {
@@ -307,7 +336,6 @@ export function Chat() {
       const encryptedText = getEncryptedTextContent({ player: otherPlayer.player, text: newMessage, });
 
       if (!encryptedText) {
-        console.log('[canvas] Encryption error; message failed to encrypt/decrypt');
         return;
       }
 
@@ -344,7 +372,6 @@ export function Chat() {
       if (document.activeElement === inputRef.current) return;
 
       if (e.key === "Enter" && e.shiftKey) {
-        // registerEncryptionKey();
         if (!!otherPlayer) {
           setChannel(CHANNELS.PLAYER);
         } else {
@@ -354,7 +381,6 @@ export function Chat() {
         focusInput();
         e.preventDefault();
       } else if (e.key === "Enter") {
-        // registerEncryptionKey();
         setChannel(CHANNELS.ALL);
         focusInput();
         e.preventDefault();
@@ -410,22 +436,6 @@ export function Chat() {
           </ClickWrapper>
         ))}
       </ChannelTabs>
-      <ClickWrapper>
-        <ChannelTab
-          style={{ backgroundColor: 'red' }}
-          onClick={() => registerKeyUnlocked()}
-        >
-          Register Key
-        </ChannelTab>
-      </ClickWrapper> 
-      <ClickWrapper>
-        <ChannelTab
-          style={{ backgroundColor: 'green' }}
-          onClick={() => sendPing()}
-        >
-          Send Ping
-        </ChannelTab>
-      </ClickWrapper> 
       <div className="h-full w-full">
         <div className="w-full overflow-y-auto">
           <ul
@@ -446,7 +456,7 @@ export function Chat() {
               }
 
               if (message.channel === CHANNELS.PLAYER) {
-                const decryptedText = getDecryptedTextContent({player: otherPlayer.player, ciphertext: message.content, nonce: message.nonce});
+                const decryptedText = getDecryptedTextContent({ciphertext: message.content, nonce: message.nonce});
 
                 textContent = decryptedText;
               }
