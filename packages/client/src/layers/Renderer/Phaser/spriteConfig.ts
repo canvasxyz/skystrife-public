@@ -2,6 +2,11 @@ import { Assets, Sprites } from "./phaserConstants";
 import PlayerColors from "../../Local/player-colors.json";
 
 const baseSprites = {
+  [Sprites.Blank]: {
+    assetKey: Assets.MainAtlas,
+    frame: "sprites/blank.png",
+  },
+
   [Sprites.Boot]: {
     assetKey: Assets.MainAtlas,
     frame: "sprites/greyscale/ui/icons/boot.png",
@@ -51,6 +56,10 @@ const baseSprites = {
     assetKey: Assets.MainAtlas,
     frame: "sprites/greyscale/structures/big/wooden-barricade/0.png",
   },
+  [Sprites.GoldCache]: {
+    assetKey: Assets.MainAtlas,
+    frame: "sprites/greyscale/structures/big/gold-cache/0.png",
+  },
   [Sprites.SelectUI]: {
     assetKey: Assets.MainAtlas,
     frame: "sprites/greyscale/ui/icons/big-select.png",
@@ -77,13 +86,25 @@ const baseSprites = {
     assetKey: Assets.MainAtlas,
     frame: "sprites/greyscale/ui/bars/green.png",
   },
+  [Sprites.HealthBarTick]: {
+    assetKey: Assets.MainAtlas,
+    frame: "sprites/entity_bars/green-tick.png",
+  },
   [Sprites.HealthBarRed]: {
     assetKey: Assets.MainAtlas,
     frame: "sprites/greyscale/ui/bars/red.png",
   },
+  [Sprites.HealthBarRedTick]: {
+    assetKey: Assets.MainAtlas,
+    frame: "sprites/entity_bars/red-tick.png",
+  },
   [Sprites.GoldBar]: {
     assetKey: Assets.MainAtlas,
     frame: "sprites/greyscale/ui/bars/yellow.png",
+  },
+  [Sprites.GoldBarTick]: {
+    assetKey: Assets.MainAtlas,
+    frame: "sprites/entity_bars/yellow-tick.png",
   },
 
   [Sprites.Banner]: {

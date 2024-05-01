@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.24;
 
-import { IStore } from "@latticexyz/store/src/IStore.sol";
-import { FieldLayout } from "@latticexyz/store/src/FieldLayout.sol";
-import { PackedCounter } from "@latticexyz/store/src/PackedCounter.sol";
-import { ResourceId } from "@latticexyz/store/src/ResourceId.sol";
-
-import { Position, PositionData, PositionTableId, Admin, OwnedBy, OwnedByTableId, PlayerTableId, Match, MatchTableId, MatchConfig, MatchConfigData, SpawnPoint, Player, MatchPlayer, LevelPositionIndex, MatchIndex, MatchIndexTableId, MatchIndexToEntity, LevelTemplatesIndex } from "../codegen/index.sol";
+import { Position, PositionData, Admin, OwnedBy, Match, MatchConfig, MatchConfigData, SpawnPoint, Player, MatchPlayer, LevelPositionIndex, MatchIndex, MatchIndexToEntity, LevelTemplatesIndex, SkyPoolConfig } from "../codegen/index.sol";
 import { SpawnSettlementTemplateId } from "../codegen/Templates.sol";
 
 function isAdmin(bytes32 key) view returns (bool) {
@@ -62,6 +57,13 @@ function getOwningPlayer(bytes32 matchEntity, bytes32 entity) view returns (byte
   }
 
   return 0;
+}
+
+function isOwnedByAddress(bytes32 matchEntity, bytes32 entity, address owner) view returns (bool) {
+  bytes32 owningPlayer = getOwningPlayer(matchEntity, entity);
+  bytes32 player = playerFromAddress(matchEntity, owner);
+
+  return owningPlayer == player;
 }
 
 function isOwnedBy(bytes32 matchEntity, bytes32 entity, bytes32 owner) view returns (bool) {

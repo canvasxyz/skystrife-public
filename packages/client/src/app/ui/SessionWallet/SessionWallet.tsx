@@ -1,8 +1,8 @@
 import { parseEther } from "viem";
 import { Modal } from "../../amalgema-ui/Modal";
 import { EthInput } from "../../amalgema-ui/SummonIsland/common";
-import { useBurnerBalance } from "../../amalgema-ui/hooks/useBurnerBalance";
-import { useMainWalletBalance } from "../../amalgema-ui/hooks/useMainWalletBalance";
+import { useBurnerBalance } from "../../amalgema-ui/hooks/useBalance";
+import { useMainWalletBalance } from "../../amalgema-ui/hooks/useBalance";
 import { Button } from "../Theme/SkyStrife/Button";
 import { Card } from "../Theme/SkyStrife/Card";
 import { Body, OverlineLarge } from "../Theme/SkyStrife/Typography";
@@ -31,10 +31,10 @@ function TopUpButton() {
           value: parseEther("0.001"),
         });
       }}
-      buttonType={"primary"}
+      buttonType="primary"
       className="grow w-full"
     >
-      top up session wallet
+      send eth to session wallet
     </PromiseButton>
   );
 }
@@ -76,7 +76,7 @@ export function SessionWallet() {
               }}
               className="text-ss-text-default"
             >
-              {parseFloat(burnerBalance.formatted ?? "0").toFixed(6)} ETH
+              {burnerBalance.formatted} ETH
             </OverlineLarge>
           </div>
 
@@ -85,13 +85,13 @@ export function SessionWallet() {
           <TopUpButton />
 
           <Modal
-            open={burnerBalance.belowDanger}
+            isOpen={burnerBalance.belowDanger}
             title="no more session wallet funds"
             trigger={<></>}
             footer={
               <div className="flex w-full space-x-2">
-                <a href={"/"} className="grow">
-                  <Button buttonType={"danger"} className="w-full">
+                <a href="/" className="grow">
+                  <Button buttonType="danger" className="w-full">
                     quit match
                   </Button>
                 </a>

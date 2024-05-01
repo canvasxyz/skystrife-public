@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.24;
 
 import { toSlice, StrCharsIter } from "@dk1a/solidity-stringutils/src/StrSlice.sol";
 
 import { System } from "@latticexyz/world/src/System.sol";
 import { ResourceId } from "@latticexyz/store/src/ResourceId.sol";
 
-import { Admin, Match, MatchName, MatchIndex, MatchSweepstake, LevelTemplatesIndex, LevelInStandardRotation, LevelInSeasonPassRotation, MatchAccessControl, MatchConfig, MatchSky, MatchConfigData, SkyPoolConfig } from "../codegen/index.sol";
+import { Admin, Match, MatchName, MatchIndex, MatchSweepstake, LevelTemplatesIndex, LevelInStandardRotation, LevelInSeasonPassRotation, MatchAccessControl, MatchConfig, MatchSky, MatchConfigData, SkyPoolConfig, MatchesPerDay } from "../codegen/index.sol";
 import { SpawnSettlementTemplateId } from "../codegen/Templates.sol";
 
 import { addressToEntity, entityToAddress } from "../libraries/LibUtils.sol";
@@ -26,7 +26,14 @@ function getCharLength(string memory str) pure returns (uint256) {
   return chars.count();
 }
 
+uint256 constant MATCHES_PER_DAY_HARD_CAP = 1000;
+
 contract MatchSystem is System {
+  modifier worldUnlocked() {
+    require(!SkyPoolConfig.getLocked(), "world is locked");
+    _;
+  }
+
   function _createMatch(
     string memory name,
     bytes32 claimedFirstMatchInWindow,
@@ -36,6 +43,12 @@ contract MatchSystem is System {
   ) internal {
     require(getCharLength(name) <= 24, "name too long");
     require(MatchConfig.getTurnLength(matchEntity) == 0, "this match already exists");
+
+    uint256 day = block.timestamp / 1 days;
+    uint256 matchesToday = MatchesPerDay.get(day);
+    require(matchesToday < MATCHES_PER_DAY_HARD_CAP, "too many matches created today");
+
+    MatchesPerDay.set(day, matchesToday + 1);
 
     bytes32 createdBy = addressToEntity(_msgSender());
 
@@ -89,7 +102,7 @@ contract MatchSystem is System {
     bytes32 claimedFirstMatchInWindow,
     bytes32 matchEntity,
     bytes32 levelId
-  ) public {
+  ) public worldUnlocked {
     require(
       LevelInStandardRotation.get(levelId) || (hasSeasonPass(_msgSender()) && LevelInSeasonPassRotation.get(levelId)),
       "this level is not in rotation"
@@ -107,7 +120,7 @@ contract MatchSystem is System {
     ResourceId systemId,
     uint256 entranceFee,
     uint256[] memory rewardPercentages
-  ) public {
+  ) public worldUnlocked {
     require(hasSeasonPass(_msgSender()), "caller does not have the season pass");
     require(
       LevelInStandardRotation.get(levelId) || LevelInSeasonPassRotation.get(levelId),
@@ -135,7 +148,7 @@ contract MatchSystem is System {
     uint256 entranceFee,
     uint256[] memory rewardPercentages,
     uint256 registrationTime
-  ) public {
+  ) public worldUnlocked {
     skyKeyHolderOnly(_msgSender());
 
     _createMatchSeasonPass(

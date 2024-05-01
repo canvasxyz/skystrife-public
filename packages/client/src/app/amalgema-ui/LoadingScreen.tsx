@@ -18,6 +18,104 @@ type Props = {
   usePrepTime?: boolean;
 };
 
+function createAnalyticsSender(networkLayer: NetworkLayer) {
+  const {
+    components: { SyncProgress },
+    utils: { sendAnalyticsEvent },
+    network: {
+      matchEntity,
+      networkConfig: { indexerUrl },
+    },
+  } = networkLayer;
+
+  function getNowSeconds() {
+    return Math.floor(DateTime.now().toSeconds());
+  }
+
+  sendAnalyticsEvent("loading-screen", {
+    startTime: getNowSeconds(),
+    matchEntity,
+  });
+  if (indexerUrl) {
+    sendAnalyticsEvent("loading-screen", {
+      startSnapshotFetch: getNowSeconds(),
+      matchEntity,
+    });
+  }
+
+  let sentEndEvent = false;
+  let sentEndSnapshotFetch = false;
+  let sentStartSnapshotHydrate = false;
+  let sentEndSnapshotHydrate = false;
+  let sentStartRpcHydrate = false;
+  let sentEndRpcHydrate = false;
+
+  SyncProgress.update$.subscribe(() => {
+    const loadingState = getComponentValue(SyncProgress, singletonEntity);
+    if (!loadingState) return;
+
+    if (!sentEndSnapshotFetch && loadingState.step === SyncStep.SNAPSHOT) {
+      sendAnalyticsEvent("loading-screen", {
+        endSnapshotFetch: getNowSeconds(),
+        matchEntity,
+        blockNumber: loadingState.lastBlockNumberProcessed.toString(),
+      });
+      sentEndSnapshotFetch = true;
+    }
+
+    if (
+      !sentStartSnapshotHydrate &&
+      loadingState.step === SyncStep.SNAPSHOT &&
+      loadingState.message.includes("Hydrating")
+    ) {
+      sendAnalyticsEvent("loading-screen", {
+        startSnapshotHydrate: getNowSeconds(),
+        matchEntity,
+      });
+      sentStartSnapshotHydrate = true;
+    }
+
+    if (
+      !sentEndSnapshotHydrate &&
+      loadingState.step === SyncStep.SNAPSHOT &&
+      loadingState.message.includes("Hydrating") &&
+      loadingState.percentage === 100
+    ) {
+      sendAnalyticsEvent("loading-screen", {
+        endSnapshotHydrate: getNowSeconds(),
+        matchEntity,
+      });
+      sentEndSnapshotHydrate = true;
+    }
+
+    if (!sentStartRpcHydrate && loadingState.step === SyncStep.RPC) {
+      sendAnalyticsEvent("loading-screen", {
+        startRpcHydrate: getNowSeconds(),
+        matchEntity,
+        blockNumber: loadingState.lastBlockNumberProcessed.toString(),
+      });
+      sentStartRpcHydrate = true;
+    }
+
+    if (sentStartRpcHydrate && !sentEndRpcHydrate && loadingState.step === SyncStep.LIVE) {
+      sendAnalyticsEvent("loading-screen", {
+        endRpcHydrate: getNowSeconds(),
+        matchEntity,
+        blockNumber: loadingState.lastBlockNumberProcessed.toString(),
+      });
+      sentEndRpcHydrate = true;
+    }
+
+    if (!sentEndEvent && loadingState.step === SyncStep.LIVE) {
+      sendAnalyticsEvent("loading-screen", {
+        endTime: getNowSeconds(),
+        matchEntity,
+      });
+      sentEndEvent = true;
+    }
+  });
+}
+
 export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
   const [hide, setHide] = React.useState(false);
 
@@ -27,15 +125,11 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
   const loadingState = useObservableValue(
     useMemo(() => {
       if (!networkLayer) return;
-
       const {
         components: { SyncProgress },
-        utils: { sendAnalyticsEvent },
       } = networkLayer;
 
-      sendAnalyticsEvent("loading-screen", {
-        startTime: Math.floor(DateTime.now().toSeconds()),
-      });
+      createAnalyticsSender(networkLayer);
 
       // use LoadingState.update$ as a trigger rather than a value
       // and concat with an initial value to trigger the first look up
@@ -44,7 +138,7 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
           const loadingState = getComponentValue(SyncProgress, singletonEntity);
           return loadingState ?? null;
         }),
-        filterNullish()
+        filterNullish(),
       );
     }, [networkLayer]),
     {
@@ -53,26 +147,8 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
       step: SyncStep.INITIALIZE,
       lastBlockNumberProcessed: 0n,
       latestBlockNumber: 0n,
-    }
+    },
   );
-
-  const [sentEndEvent, setSentEndEvent] = React.useState(false);
-  useEffect(() => {
-    if (sentEndEvent) return;
-    if (!networkLayer) return;
-
-    // Send analytics event when the game is ready
-    if (loadingState.step === SyncStep.LIVE) {
-      const {
-        utils: { sendAnalyticsEvent },
-      } = networkLayer;
-
-      setSentEndEvent(true);
-      sendAnalyticsEvent("loading-screen", {
-        endTime: Math.floor(DateTime.now().toSeconds()),
-      });
-    }
-  }, [loadingState, networkLayer, sentEndEvent, usePrepTime]);
 
   const [worldValid, setWorldValid] = useState(false);
   useEffect(() => {
@@ -104,15 +180,18 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
   useEffect(() => {
     if (!startGameProgress) return;
 
-    const interval = setInterval(() => {
-      setPrepareGameProgress((prev) => {
-        if (prev === 100) {
-          clearInterval(interval);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, (prepTimeSeconds * 1000) / 100);
+    const interval = setInterval(
+      () => {
+        setPrepareGameProgress((prev) => {
+          if (prev === 100) {
+            clearInterval(interval);
+            return prev;
+          }
+          return prev + 1;
+        });
+      },
+      (prepTimeSeconds * 1000) / 100,
+    );
 
     return () => clearInterval(interval);
   }, [networkLayer, prepTimeSeconds, startGameProgress, usePrepTime]);
@@ -125,7 +204,8 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
   const showPrepMessage = loadingState.step === SyncStep.LIVE && usePrepTime;
 
   const loadingMessage = showPrepMessage ? "Preparing Game" : loadingState.message;
-  const loadingPercentage = showPrepMessage ? prepareGameProgress : loadingState.percentage;
+  const loadingPercentage = showPrepMessage ? prepareGameProgress : Math.round(loadingState.percentage);
+  const showPercentage = showPrepMessage || loadingPercentage > 0;
 
   return (
     <div
@@ -150,12 +230,12 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
         </OverlineLarge>
         <div className="h-3" />
         <Body className="text-ss-text-light text-center">
-          Sky Strife is a fully onchain RTS. Compete for control of islands, earn {EMOJI}, and summon your own matches.
+          Sky Strife is a fully onchain RTS game. Compete for control of islands, earn {EMOJI}, and create your own
+          matches.
         </Body>
 
         {doneLoading && worldValid && (
-          <div className="flex flex-col mt-8 grow">
-            <Body className="text-center text-ss-text-default">Connected!</Body>
+          <div className="flex flex-col mt-4 grow">
             <Button
               buttonType="primary"
               size="lg"
@@ -164,12 +244,12 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
               }}
               className="mt-4 w-full"
             >
-              Play
+              Enter
             </Button>
             <div className="h-4"></div>
             <a
               className="w-full"
-              href="https://latticexyz.notion.site/How-to-play-Sky-Strife-8c9f951c605e487cad9e8158bc641835?pvs=4}"
+              href="https://latticexyz.notion.site/How-to-Play-72640de2c45e4735954f8ab54b9bd593"
               target="_blank"
               rel="noreferrer"
             >
@@ -177,6 +257,18 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
                 How To Play
               </Button>
             </a>
+
+            <Body style={{ fontSize: "12px" }} className="px-4 mt-4 text-center text-sm font-thin">
+              By clicking &apos;Enter&apos;, you acknowledge that you (i) agree to the{" "}
+              <Link style={{ fontSize: "12px" }} className="" href={"/terms.pdf"}>
+                Terms of Service
+              </Link>{" "}
+              and (ii) have read and understood our{" "}
+              <Link style={{ fontSize: "12px" }} href={"/privacy-policy"}>
+                Privacy Policy
+              </Link>
+              .
+            </Body>
           </div>
         )}
 
@@ -200,7 +292,7 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
             <div className="w-4"></div>
             <Body className="text-center text-3xl text-ss-text-default">
               {loadingMessage}
-              <div className="text-ss-blue">({loadingPercentage}%)</div>
+              {showPercentage && <div className="text-ss-blue">({loadingPercentage}%)</div>}
             </Body>
             <div className="w-4"></div>
             <img height="64px" width="64px" src="/public/assets/dragoon_attack.gif" />
@@ -226,6 +318,18 @@ export const LoadingScreen = ({ networkLayer, usePrepTime }: Props) => {
 
           <Link className="text-ss-gold" href={HOW_TO_PLAY_URL}>
             getting started
+          </Link>
+
+          <div className="w-6 text-center text-ss-divider-stroke">|</div>
+
+          <Link className="text-ss-gold" href={"/privacy-policy"}>
+            privacy policy
+          </Link>
+
+          <div className="w-6 text-center text-ss-divider-stroke">|</div>
+
+          <Link className="text-ss-gold" href={"/terms.pdf"}>
+            terms of use
           </Link>
         </div>
 

@@ -1,9 +1,8 @@
 import { useComponentValue, useEntityQuery } from "@latticexyz/react";
 import { Entity, Has, HasValue, getComponentValue, runQuery } from "@latticexyz/recs";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAmalgema } from "../../../useAmalgema";
-import { Hex, formatEther, hexToString, stringToHex } from "viem";
-import { useMatchRewards } from "../hooks/useMatchRewards";
+import { Hex, formatEther, hexToString } from "viem";
 import { Modal } from "../Modal";
 import { useMatchInfo } from "../../ui/hooks/useMatchInfo";
 import { PromiseButton } from "../../ui/hooks/PromiseButton";
@@ -20,9 +19,10 @@ import { ordinalSuffix } from "../MatchRewardsFooter";
 import { Button } from "../../ui/Theme/SkyStrife/Button";
 import { useCanAffordEntrance, useIsAllowed, useJoinMatch } from "./hooks";
 import { useExternalAccount } from "../hooks/useExternalAccount";
-import { useBurnerBalance } from "../hooks/useBurnerBalance";
+import { useBurnerBalance } from "../hooks/useBalance";
 import { twMerge } from "tailwind-merge";
 import { ConfirmedCheck } from "../../ui/Theme/SkyStrife/Icons/ConfirmedCheck";
+import { encodeMatchEntity } from "../../../encodeMatchEntity";
 
 /**
  * Don't ask me why, but managing the open state outside
@@ -40,9 +40,10 @@ export function JoinModal({
 }) {
   const {
     network: {
-      components: { MatchSweepstake, Player, Match, OwnedBy, OfficialLevel, HeroInRotation },
+      components: { MatchSweepstake, MatchPlayers, CreatedByAddress, OfficialLevel, HeroInRotation },
     },
     components: { MatchJoinable },
+    utils: { getMatchRewards },
   } = useAmalgema();
 
   const freeHero = [...runQuery([HasValue(HeroInRotation, { value: true })])][0];
@@ -50,7 +51,7 @@ export function JoinModal({
   const [previewLevel, setPreviewLevel] = useState(false);
   const [showAccessList, setShowAccessList] = useState(false);
 
-  const { totalRewards, sweepstakeRewards } = useMatchRewards(matchEntity);
+  const { totalRewards, sweepstakeRewards } = getMatchRewards(matchEntity);
   const allowedAccounts = useAccessList(matchEntity);
 
   const matchInfo = useMatchInfo(matchEntity);
@@ -79,15 +80,19 @@ export function JoinModal({
   const joinMatch = useJoinMatch(matchEntity, hero);
 
   const { address } = useExternalAccount();
-  const allPlayersInMatch = useEntityQuery([Has(Player), HasValue(Match, { matchEntity })]);
+  const allPlayersInMatch = useComponentValue(MatchPlayers, matchEntity)?.value ?? [];
 
-  const currentPlayerInMatch = Boolean(
-    allPlayersInMatch.find((p) => {
-      if (!address) return false;
+  const currentPlayerInMatch = useMemo(
+    () =>
+      Boolean(
+        allPlayersInMatch.find((p) => {
+          if (!address) return false;
 
-      const ownedBy = getComponentValue(OwnedBy, p)?.value as Hex;
-      return ownedBy === addressToEntityID(address);
-    })
+          const createdBy = getComponentValue(CreatedByAddress, encodeMatchEntity(matchEntity, p))?.value as Hex;
+          return createdBy === addressToEntityID(address);
+        }),
+      ),
+    [],
   );
 
   const burnerBalance = useBurnerBalance();
@@ -101,7 +106,7 @@ export function JoinModal({
           <div className="w-full flex gap-x-4">
             {!currentPlayerInMatch && (
               <a href={getMatchUrl(matchEntity)} target="_blank" rel="noopener noreferrer" className="grow">
-                <Button buttonType={"tertiary"} className="w-full">
+                <Button buttonType="tertiary" className="w-full">
                   Spectate
                 </Button>
               </a>
@@ -109,8 +114,8 @@ export function JoinModal({
 
             {currentPlayerInMatch && (
               <a href={getMatchUrl(matchEntity)} target="_blank" rel="noopener noreferrer" className="grow">
-                <Button buttonType={"tertiary"} className="w-full">
-                  Play
+                <Button buttonType="tertiary" className="w-full">
+                  Re-Join
                 </Button>
               </a>
             )}
@@ -118,7 +123,7 @@ export function JoinModal({
             {!currentPlayerInMatch && matchJoinable && (
               <PromiseButton
                 disabled={!isAllowed || !canAffordEntrance}
-                buttonType={"secondary"}
+                buttonType="secondary"
                 className="grow"
                 promise={() => joinMatch()}
               >

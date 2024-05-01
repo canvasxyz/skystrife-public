@@ -22,25 +22,29 @@ app.post("/track-client-event/:chain_id/:world_address", async (c) => {
   console.log(`  data: ${data}`);
   console.log(`  country: ${country}`);
 
+  const now = new Date().toISOString();
+
   try {
     await client.query(
       `
-      INSERT INTO client_events_${chain_id} (
+      INSERT INTO public.client_events_${chain_id} (
         event_name,
         world_address,
         player_address,
         session_wallet_address,
         data,
-        country
+        country,
+        created_at
       ) VALUES (
         '${event_name}',
         '${world_address}',
         '${player_address}',
         '${session_wallet_address}',
         '${data}',
-        '${country}'
+        '${country}',
+        '${now}'
       );
-    `
+    `,
     );
 
     return c.json({ ok: true, message: `Stored event ${event_name}` });
@@ -56,6 +60,7 @@ app.post("/track/:chain_id/:world_address", async (c) => {
   await client.connect();
 
   const country = c.req.raw.cf?.country || "unknown";
+  const ip = c.req.header("CF-Connecting-IP") || "unknown";
 
   const { chain_id, world_address } = c.req.param();
   const {
@@ -98,10 +103,13 @@ app.post("/track/:chain_id/:world_address", async (c) => {
   console.log(`  action_id: ${action_id}`);
   console.log(`  client_submitted_timestamp: ${client_submitted_timestamp}`);
   console.log(`  country: ${country}`);
+  console.log(`  ip: ${ip}`);
+
+  const now = new Date().toISOString();
 
   try {
     await client.query(
-      `INSERT INTO player_transactions_${chain_id} (
+      `INSERT INTO public.player_transactions_${chain_id} (
         world_address,
         entity,
         system_call,
@@ -121,7 +129,9 @@ app.post("/track/:chain_id/:world_address", async (c) => {
         session_wallet_address,
         action_id,
         client_submitted_timestamp,
-        country
+        country,
+        ip,
+        created_at
       ) VALUES (
         '${world_address}',
         '${entity}',
@@ -142,8 +152,10 @@ app.post("/track/:chain_id/:world_address", async (c) => {
         '${session_wallet_address}',
         '${action_id}',
         ${client_submitted_timestamp},
-        '${country}'
-      );`
+        '${country}',
+        '${ip}',
+        '${now}'
+      );`,
     );
 
     return c.json({ ok: true, message: `Stored tx ${hash}` });
@@ -152,6 +164,49 @@ app.post("/track/:chain_id/:world_address", async (c) => {
 
     return c.json({ err: (e as Error).toString() }, 500);
   }
+});
+
+app.get("/is-eu", async (c) => {
+  const EU_COUNTRIES = [
+    "AT",
+    "BE",
+    "BG",
+    "CY",
+    "CZ",
+    "DE",
+    "DK",
+    "EE",
+    "ES",
+    "FI",
+    "FR",
+    "GR",
+    "HR",
+    "HU",
+    "IE",
+    "IT",
+    "LT",
+    "LU",
+    "LV",
+    "MT",
+    "NL",
+    "PL",
+    "PT",
+    "RO",
+    "SE",
+    "SI",
+    "SK",
+  ];
+
+  const country = (c.req.raw.cf?.country || "unknown") as string;
+
+  c.res.headers.set("Access-Control-Allow-Origin", "*");
+
+  return c.json(
+    {
+      isEu: EU_COUNTRIES.includes(country),
+    },
+    200,
+  );
 });
 
 export default app;

@@ -1,27 +1,25 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
-import { System } from "@latticexyz/world/src/System.sol";
-import { IWorld } from "../codegen/world/IWorld.sol";
+pragma solidity >=0.8.24;
 
-import { Player, Stamina, LastAction, OwnedBy, SpawnPoint, Match, MatchPlayer, MatchPlayers } from "../codegen/index.sol";
+import { Player, Gold, LastAction, OwnedBy, CreatedByAddress, SpawnPoint, MatchPlayer, MatchPlayers } from "../codegen/index.sol";
 
 import { addressToEntity } from "../libraries/LibUtils.sol";
 import { createMatchEntity } from "../createMatchEntity.sol";
 
 import { charge } from "../libraries/LibCharge.sol";
 
-int32 constant STARTING_GOLD = 250;
+int32 constant STARTING_GOLD = 500;
 
 function createPlayerEntity(bytes32 matchEntity, address playerAddress) returns (bytes32) {
   bytes32 addressEntity = addressToEntity(playerAddress);
   bytes32 playerEntity = createMatchEntity(matchEntity);
 
+  CreatedByAddress.set(matchEntity, playerEntity, addressEntity);
   MatchPlayer.set(matchEntity, playerAddress, playerEntity);
   MatchPlayers.push(matchEntity, playerEntity);
 
-  OwnedBy.set(matchEntity, playerEntity, addressEntity);
   Player.set(matchEntity, playerEntity, 1);
-  Stamina.set(matchEntity, playerEntity, STARTING_GOLD);
+  Gold.set(matchEntity, playerEntity, STARTING_GOLD);
   LastAction.set(matchEntity, playerEntity, block.timestamp);
 
   return playerEntity;

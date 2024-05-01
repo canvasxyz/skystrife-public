@@ -6,26 +6,26 @@ import { useCurrentPlayer } from "../hooks/useCurrentPlayer";
 import { Button } from "../Theme/SkyStrife/Button";
 import { Heading, OverlineSmall } from "../Theme/SkyStrife/Typography";
 import { addressToEntityID } from "../../../mud/setupNetwork";
-import { Hex, formatEther, stringToHex } from "viem";
+import { ContractFunctionName, Hex, formatEther, stringToHex } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useMatchInfo } from "../hooks/useMatchInfo";
 import { CreatedBy } from "../../amalgema-ui/CreatedBy";
 import { SendTxButton } from "../hooks/SendTxButton";
 import { getMatchUrl } from "../../../getMatchUrl";
 import IWorldAbi from "contracts/out/IWorld.sol/IWorld.abi.json";
-import { SystemCall, encodeSystemCallFrom, encodeSystemCalls } from "@latticexyz/world";
-import { LOBBY_SYSTEM_ID, NAME_SYSTEM_ID, PLAYER_REGISTER_SYSTEM_ID } from "../../../constants";
+import { SystemCall, encodeSystemCallFrom, encodeSystemCalls } from "@latticexyz/world/internal";
+import { BUILD_SYSTEM_ID, LOBBY_SYSTEM_ID, NAME_SYSTEM_ID, PLAYER_REGISTER_SYSTEM_ID } from "../../../constants";
 import { SessionWalletManager } from "../../amalgema-ui/SessionWalletManager";
 import { useExternalAccount } from "../hooks/useExternalAccount";
 import { getDelegationSystemCalls } from "../../../getDelegationSystemCalls";
-import { useBurnerBalance } from "../../amalgema-ui/hooks/useBurnerBalance";
-import { useMatchRewards } from "../../amalgema-ui/hooks/useMatchRewards";
+import { useBurnerBalance } from "../../amalgema-ui/hooks/useBalance";
 import { useOrbBalance } from "../../amalgema-ui/hooks/useOrbBalance";
 import { LabeledOrbInput } from "../../amalgema-ui/SummonIsland/common";
 import { HeroSelect } from "../../amalgema-ui/HeroSelect";
 import { useIsAllowed } from "../../amalgema-ui/MatchTable/hooks";
 import { SeasonPassIcon } from "../../amalgema-ui/SeasonPassIcon";
 import { JoinModal } from "../../amalgema-ui/MatchTable/JoinModal";
+import { useNameIsValid } from "../../amalgema-ui/hooks/useNameIsValid";
 
 function ChainSVG({ onClick }: { onClick?: () => void }) {
   const [hover, setHover] = useState(false);
@@ -71,7 +71,7 @@ const RegistrationForm = ({ matchEntity, address }: { matchEntity: Entity; addre
     networkLayer: {
       network,
       components: { PlayerReady },
-      utils: { getAvailableLevelSpawns, hasSystemDelegation },
+      utils: { getAvailableLevelSpawns, hasSystemDelegation, getMatchRewards },
       executeSystemWithExternalWallet,
     },
   } = useMUD();
@@ -95,14 +95,11 @@ const RegistrationForm = ({ matchEntity, address }: { matchEntity: Entity; addre
   const playerReadys = useEntityQuery([Has(PlayerReady), HasValue(Match, { matchEntity })]);
   const currentPlayerReady = Boolean(playerReadys.find((i) => i === currentPlayer?.player));
 
-  const otherNames = useEntityQuery([Has(Name)]).map((entity) => getComponentValue(Name, entity)?.value);
-  const nameTaken = otherNames.includes(newName);
-
   const matchConfig = useComponentValue(MatchConfig, matchEntity);
   const levelId = matchConfig?.levelId;
 
   const burnerBalance = useBurnerBalance();
-  const matchRewards = useMatchRewards(matchEntity);
+  const matchRewards = getMatchRewards(matchEntity);
   const entranceFeeEth = formatEther(matchRewards.entranceFee);
 
   const orbBalance = useOrbBalance();
@@ -122,9 +119,9 @@ const RegistrationForm = ({ matchEntity, address }: { matchEntity: Entity; addre
         const hasDelegation =
           externalWalletClient &&
           externalWalletClient.account &&
-          hasSystemDelegation(externalWalletClient.account.address, walletClient.account.address);
+          hasSystemDelegation(externalWalletClient.account.address, walletClient.account.address, BUILD_SYSTEM_ID);
 
-        const systemCalls: readonly Omit<SystemCall<typeof IWorldAbi>, "abi">[] = [
+        const systemCalls = [
           {
             systemId: PLAYER_REGISTER_SYSTEM_ID,
             functionName: "register",
@@ -135,7 +132,10 @@ const RegistrationForm = ({ matchEntity, address }: { matchEntity: Entity; addre
             functionName: "setName",
             args: [newName],
           },
-        ];
+        ] as const satisfies readonly Omit<
+          SystemCall<typeof IWorldAbi, ContractFunctionName<typeof IWorldAbi>>,
+          "abi"
+        >[];
 
         await executeSystemWithExternalWallet({
           systemCall: "batchCall",
@@ -146,9 +146,10 @@ const RegistrationForm = ({ matchEntity, address }: { matchEntity: Entity; addre
                 IWorldAbi,
                 hasDelegation
                   ? systemCalls
-                  : [...systemCalls, ...getDelegationSystemCalls(walletClient.account.address)]
+                  : [...systemCalls, ...getDelegationSystemCalls(walletClient.account.address)],
               ).map(([systemId, callData]) => ({ systemId, callData })),
             ],
+            { account: address },
           ],
         });
       } catch (e) {
@@ -168,7 +169,7 @@ const RegistrationForm = ({ matchEntity, address }: { matchEntity: Entity; addre
           systemId: LOBBY_SYSTEM_ID,
           functionName: "toggleReady",
           args: [matchEntity as Hex],
-        })
+        }),
       );
     } else {
       // otherwise return a promise to satisfy button types
@@ -179,21 +180,21 @@ const RegistrationForm = ({ matchEntity, address }: { matchEntity: Entity; addre
           systemId: LOBBY_SYSTEM_ID,
           functionName: "toggleReady",
           args: [matchEntity as Hex],
-        })
+        }),
       );
     }
   };
 
+  const { nameValid, nameValidityMessage } = useNameIsValid(newName);
+
   let disabledMessage = "";
-  if (newName.length === 0) disabledMessage = "Pick a name";
-  if (newName.length > 32) disabledMessage = "Name too long";
-  if (nameTaken) disabledMessage = "Name taken";
+  if (!nameValid) disabledMessage = nameValidityMessage;
   if (orbBalance < matchRewards.entranceFee) disabledMessage = `Cannot pay ${entranceFeeEth}🔮`;
   if (!isAllowed && isSeasonPassOnly) disabledMessage = "Season Pass hodlers only";
   if (!isAllowed && hasAllowList) disabledMessage = "You are not on the access list";
 
   let registerDisabled = false;
-  if (newName.length === 0 || newName.length > 32 || (nameTaken && name?.value !== newName)) registerDisabled = true;
+  if (!nameValid) registerDisabled = true;
   if (orbBalance < matchRewards.entranceFee) registerDisabled = true;
   if (!isAllowed) registerDisabled = true;
 
@@ -216,15 +217,13 @@ const RegistrationForm = ({ matchEntity, address }: { matchEntity: Entity; addre
         >
           <div className="relative h-fit">
             <input
-              type={"text"}
+              type="text"
               className="w-full py-2 px-3 rounded border border-1 border-white bg-[#F4F3F1] flex flex-row"
               placeholder="Enter a name"
               disabled={Boolean(pendingTx || currentPlayer?.player)}
               value={newName}
               onChange={(e) => {
-                let name = e.target.value;
-                if (name.length > 32) name = name.slice(0, 32);
-
+                const name = e.target.value;
                 setNewName(name);
                 return false;
               }}

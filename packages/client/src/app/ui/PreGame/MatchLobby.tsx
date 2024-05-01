@@ -9,7 +9,6 @@ import { Checkbox } from "../Theme/Checkbox";
 import { Button, ButtonType } from "../Theme/Button";
 import { Caption, OverlineSmall } from "../Theme/SkyStrife/Typography";
 import { DisplayNameUnformatted } from "../../amalgema-ui/CreatedBy";
-import { decodeEntity } from "@latticexyz/store-sync/recs";
 import { decodeMatchEntity } from "../../../decodeMatchEntity";
 import { UnitTypeSprites } from "../../../layers/Renderer/Phaser/phaserConstants";
 import { SpriteImage } from "../Theme/SpriteImage";
@@ -32,10 +31,10 @@ function StarSVG() {
 export const MatchLobby = ({ matchEntity }: { matchEntity: Entity }) => {
   const {
     networkLayer: {
-      components: { Player, PlayerReady, Match, MatchConfig, OwnedBy, UnitType },
+      components: { Player, PlayerReady, Match, MatchConfig, CreatedByAddress, OwnedBy, UnitType },
       utils: { getLevelSpawns },
     },
-    localLayer: {
+    headlessLayer: {
       api: { getOwnerColor },
     },
   } = useMUD();
@@ -117,9 +116,9 @@ export const MatchLobby = ({ matchEntity }: { matchEntity: Entity }) => {
               {allSpawns.map((_, i) => {
                 const player = allPlayers[i];
                 const playerReady = Boolean(playerReadys.find((i) => player === i));
-                const playerColor = getOwnerColor(player);
+                const playerColor = getOwnerColor(player, matchEntity);
                 const isSelf = player === currentPlayer?.player;
-                const owner = getComponentValue(OwnedBy, player);
+                const owner = getComponentValue(CreatedByAddress, player);
 
                 // this should only be the hero before the game starts
                 const ownedUnits = runQuery([

@@ -6,16 +6,16 @@ import { addressToEntityID } from "../../../mud/setupNetwork";
 export const useCurrentPlayer = (matchEntity: Entity) => {
   const {
     networkLayer: {
-      components: { Name, Match, OwnedBy, Player },
+      components: { Name, Match, CreatedByAddress, Player },
     },
-    localLayer: {
+    headlessLayer: {
       api: { getOwnerColor },
     },
     externalWalletClient,
   } = useMUD();
 
   const playerEntity = useEntityQuery([
-    HasValue(OwnedBy, {
+    HasValue(CreatedByAddress, {
       value:
         externalWalletClient && externalWalletClient.account
           ? addressToEntityID(externalWalletClient.account.address)
@@ -25,10 +25,10 @@ export const useCurrentPlayer = (matchEntity: Entity) => {
     Has(Player),
   ])[0];
 
-  const mainWallet = (useComponentValue(OwnedBy, playerEntity)?.value ?? "0x00") as Entity;
+  const mainWallet = (useComponentValue(CreatedByAddress, playerEntity)?.value ?? "0x00") as Entity;
   const name = useComponentValue(Name, mainWallet)?.value;
   const playerColor = playerEntity
-    ? getOwnerColor(playerEntity)
+    ? getOwnerColor(playerEntity, matchEntity)
     : {
         name: "white",
         color: 0xffffff,

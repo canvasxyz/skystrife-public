@@ -14,7 +14,7 @@ export function createEmbodiedEntity<Type extends keyof GameObjectTypes>(
   id: string,
   group: Phaser.GameObjects.Group,
   type: Type,
-  currentCameraFilter = 0
+  currentCameraFilter = 0,
 ): EmbodiedEntity<Type> {
   const position: PixelCoord = observable({ x: 0, y: 0 });
   const onOnce = new Map<string, GameObjectFunction<Type>>();
@@ -96,9 +96,10 @@ export function createEmbodiedEntity<Type extends keyof GameObjectTypes>(
     gameObject.off("pointerout");
     gameObject.off("pointerdown");
     gameObject.off("pointerup");
+    gameObject.removeAllListeners();
     if (isSprite(gameObject, type)) {
       gameObject.clearTint();
-      gameObject.setTexture("");
+      gameObject.setTexture("MainAtlas", "sprites/blank.png");
       gameObject.flipX = false;
       gameObject.flipY = false;
     }
@@ -142,7 +143,7 @@ export function createEmbodiedEntity<Type extends keyof GameObjectTypes>(
 
 function executeGameObjectFunctions<Type extends keyof GameObjectTypes>(
   gameObject: GameObject<Type>,
-  functions: Iterable<GameObjectFunction<Type>>
+  functions: Iterable<GameObjectFunction<Type>>,
 ) {
   if (!gameObject) return;
   for (const func of functions) {
@@ -151,7 +152,7 @@ function executeGameObjectFunctions<Type extends keyof GameObjectTypes>(
 }
 
 function modifiesPosition<Type extends keyof GameObjectTypes>(
-  func: GameObjectFunction<Type>
+  func: GameObjectFunction<Type>,
 ): Partial<PixelCoord> | undefined {
   let newPosition: Partial<PixelCoord> | undefined = undefined;
   const gameObjectProxy = new Proxy(
@@ -168,7 +169,7 @@ function modifiesPosition<Type extends keyof GameObjectTypes>(
         if (prop === "y") newPosition = newPosition ? { ...newPosition, y: value } : { y: value };
         return true;
       },
-    }
+    },
   );
   func(gameObjectProxy as GameObject<Type>);
   return newPosition;

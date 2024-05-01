@@ -17,21 +17,31 @@ import { decodeEntity, encodeEntity } from "@latticexyz/store-sync/recs";
 import { createSystemExecutor } from "./createSystemExecutor";
 import { createTransactionCacheSystem } from "./systems/TransactionCacheSystem";
 import { TransactionDB } from "./TransactionDB";
-import { decodeValue } from "@latticexyz/protocol-parser";
+import { decodeValue, KeySchema } from "@latticexyz/protocol-parser/internal";
 import { hexToResource } from "@latticexyz/common";
-import { KeySchema } from "@latticexyz/protocol-parser";
 import { useStore } from "../../useStore";
 import { addressToEntityID } from "../../mud/setupNetwork";
-import { encodeSystemCallFrom } from "@latticexyz/world";
+import { encodeSystemCallFrom } from "@latticexyz/world/internal";
 import IWorldAbi from "contracts/out/IWorld.sol/IWorld.abi.json";
 import { matchIdFromEntity } from "../../matchIdFromEntity";
 import { matchIdToEntity } from "../../matchIdToEntity";
-import { BUILD_SYSTEM_ID, BYTES32_ZERO, MOVE_SYSTEM_ID, SPAWN_SETTLEMENT, UNLIMITED_DELEGATION } from "../../constants";
+import { isDefined } from "@latticexyz/common/utils";
+import {
+  ALLOW_LIST_SYSTEM_ID,
+  BUILD_SYSTEM_ID,
+  BYTES32_ZERO,
+  EMOJI,
+  MOVE_SYSTEM_ID,
+  SEASON_PASS_ONLY_SYSTEM_ID,
+  SPAWN_SETTLEMENT,
+  UNLIMITED_DELEGATION,
+} from "../../constants";
 import { decodeMatchEntity } from "../../decodeMatchEntity";
 import { encodeMatchEntity } from "../../encodeMatchEntity";
 import { ANALYTICS_URL } from "./utils";
 import { uuid } from "@latticexyz/utils";
 import { createJoinableMatchSystem } from "./systems/JoinableMatchSystem";
+import lodash from "lodash";
 
 /**
  * The Network layer is the lowest layer in the client architecture.
@@ -48,6 +58,8 @@ export async function createNetworkLayer(config: NetworkConfig) {
     if (!isBrowser) return false;
 
     const consent = localStorage.getItem("analytics-consent");
+    if (consent === null) return true;
+
     return consent === "true";
   };
 
@@ -82,6 +94,8 @@ export async function createNetworkLayer(config: NetworkConfig) {
     const finalPoint = path[path.length - 1];
 
     const { externalWalletClient } = useStore.getState();
+    if (!externalWalletClient?.account) return;
+
     await executeSystem({
       entity,
       systemCall: "callFrom",
@@ -107,7 +121,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
           from: externalWalletClient.account.address,
           systemId: MOVE_SYSTEM_ID,
           functionName: "move",
-          args: [currentMatchEntity, decodeMatchEntity(entity).entity, path],
+          args: [currentMatchEntity as Hex, decodeMatchEntity(entity).entity, path],
         }),
       ],
     });
@@ -119,6 +133,8 @@ export async function createNetworkLayer(config: NetworkConfig) {
     console.log(`Attacking entity ${defender} with entity ${attacker}`);
 
     const { externalWalletClient } = useStore.getState();
+    if (!externalWalletClient?.account) return;
+
     await executeSystem({
       entity: attacker,
       systemCall: "callFrom",
@@ -144,7 +160,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
           from: externalWalletClient.account.address,
           systemId: MOVE_SYSTEM_ID,
           functionName: "fight",
-          args: [currentMatchEntity, decodeMatchEntity(attacker).entity, decodeMatchEntity(defender).entity],
+          args: [currentMatchEntity as Hex, decodeMatchEntity(attacker).entity, decodeMatchEntity(defender).entity],
         }),
       ],
     });
@@ -156,10 +172,12 @@ export async function createNetworkLayer(config: NetworkConfig) {
     console.log(
       `Moving entity ${attacker} to position (${path[path.length - 1].x}, ${
         path[path.length - 1].y
-      }) and attacking entity ${defender}`
+      }) and attacking entity ${defender}`,
     );
 
     const { externalWalletClient } = useStore.getState();
+    if (!externalWalletClient?.account) return;
+
     await executeSystem({
       entity: attacker,
       systemCall: "callFrom",
@@ -185,7 +203,12 @@ export async function createNetworkLayer(config: NetworkConfig) {
           from: externalWalletClient.account.address,
           systemId: MOVE_SYSTEM_ID,
           functionName: "moveAndAttack",
-          args: [currentMatchEntity, decodeMatchEntity(attacker).entity, path, decodeMatchEntity(defender).entity],
+          args: [
+            currentMatchEntity as Hex,
+            decodeMatchEntity(attacker).entity,
+            path,
+            decodeMatchEntity(defender).entity,
+          ],
         }),
       ],
     });
@@ -197,6 +220,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
     console.log(`Building prototype ${prototypeId} at ${JSON.stringify(position)}`);
 
     const { externalWalletClient } = useStore.getState();
+    if (!externalWalletClient?.account) return;
 
     await executeSystem({
       entity: builderId,
@@ -209,7 +233,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
           systemId: BUILD_SYSTEM_ID,
           functionName: "build",
           args: [
-            currentMatchEntity,
+            currentMatchEntity as Hex,
             decodeMatchEntity(builderId).entity,
             prototypeId as Hex,
             { x: position.x, y: position.y },
@@ -228,7 +252,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
     }: {
       owner?: Entity;
       matchId?: number;
-    }
+    },
   ) {
     console.log(`Spawning prototype ${prototypeId} at ${JSON.stringify(position)}`);
     const matchId = maybeMatchId ?? currentMatchId ?? -1;
@@ -255,9 +279,60 @@ export async function createNetworkLayer(config: NetworkConfig) {
     return owningPlayer && owningPlayer === player;
   }
 
+  function getMatchRewards(matchEntity: Entity) {
+    const { MatchReward, MatchConfig, MatchSweepstake } = components;
+
+    const skypoolRewards = [...runQuery([Has(MatchReward)])]
+      .map((key) => {
+        const { entity, rank } = decodeEntity(MatchReward.metadata.keySchema, key);
+        if (entity !== matchEntity) return;
+
+        const { value } = getComponentValueStrict(MatchReward, key);
+
+        const emoji = EMOJI;
+
+        return { rank, value, emoji };
+      })
+      .filter(isDefined);
+
+    const matchConfig = getComponentValue(MatchConfig, matchEntity);
+    const levelSpawns = getLevelSpawns(matchConfig?.levelId ?? "0");
+
+    const matchSweepstake = getComponentValue(MatchSweepstake, matchEntity);
+    const entranceFee = matchSweepstake?.entranceFee ?? 0n;
+    const totalSweepstakeRewardPool = entranceFee * BigInt(levelSpawns.length);
+    const sweepstakeRewards = lodash.times(levelSpawns.length + 1, (i) => {
+      const percentage = matchSweepstake?.rewardPercentages[i] ?? 0n;
+      const value = (totalSweepstakeRewardPool * percentage) / 100n;
+
+      return { rank: i, value };
+    });
+
+    const totalRewards = skypoolRewards.map(({ value }, i) => {
+      const sweepstakeReward = sweepstakeRewards[i]?.value ?? 0n;
+      return { rank: i, value: value + sweepstakeReward };
+    });
+
+    return {
+      skypoolRewards,
+      sweepstakeRewards,
+      totalRewards,
+      entranceFee,
+    };
+  }
+
+  function getMatchAccessDetails(matchEntity: Entity) {
+    const matchAccessControl = getComponentValue(components.MatchAccessControl, matchEntity);
+
+    const hasAllowList = matchAccessControl && matchAccessControl.systemId === ALLOW_LIST_SYSTEM_ID;
+    const isSeasonPassOnly = matchAccessControl && matchAccessControl.systemId === SEASON_PASS_ONLY_SYSTEM_ID;
+
+    return { hasAllowList, isSeasonPassOnly };
+  }
+
   function getPlayerEntity(
     address: string | undefined,
-    matchEntity: Entity | null = currentMatchEntity
+    matchEntity: Entity | null = currentMatchEntity,
   ): Entity | undefined {
     if (!address) return;
     if (!matchEntity) return;
@@ -265,7 +340,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
     const addressEntity = address as Entity;
     const playerEntity = [
       ...runQuery([
-        HasValue(components.OwnedBy, { value: addressEntity }),
+        HasValue(components.CreatedByAddress, { value: addressEntity }),
         Has(components.Player),
         HasValue(components.Match, { matchEntity }),
       ]),
@@ -384,7 +459,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
     const initialValue: bigint[] = [];
     return templateIds.value.reduce(
       (c, _templateId, i) => (_templateId === templateId ? c.concat(BigInt(i)) : c),
-      initialValue
+      initialValue,
     );
   };
 
@@ -394,7 +469,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
     return getLevelSpawns(levelId).filter((index) => {
       const reserved = hasComponent(
         SpawnReservedBy,
-        encodeEntity(SpawnReservedBy.metadata.keySchema, { matchEntity, index })
+        encodeEntity(SpawnReservedBy.metadata.keySchema, { matchEntity, index }),
       );
 
       return !reserved;
@@ -418,7 +493,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
     // Workaround, custom decoding for user-defined types
     return ["TerrainType", "StructureType", "UnitType"].includes(name)
       ? decodeValue({ value: "uint8" }, staticData as Hex)
-      : decodeValue(component.metadata?.valueSchema, staticData as Hex);
+      : decodeValue((component.metadata as any)?.valueSchema, staticData as Hex);
   }
 
   function getTemplateValueStrict(tableId: Hex, templateId: Hex) {
@@ -430,7 +505,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
 
     const { staticData } = getComponentValueStrict(
       components.TemplateContent,
-      encodeEntity(keySchema, { templateId, tableId })
+      encodeEntity(keySchema, { templateId, tableId }),
     );
 
     return decodeData(tableId, staticData as Hex);
@@ -442,7 +517,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
       encodeEntity(components.LevelPosition.metadata.keySchema, {
         levelId,
         index,
-      })
+      }),
     );
   }
 
@@ -478,7 +553,7 @@ export async function createNetworkLayer(config: NetworkConfig) {
 
   function hasUnlimitedDelegation(delegator: Hex, delegatee: Hex): boolean {
     return Array.from(runQuery([Has(components.UserDelegationControl)])).some((entity) => {
-      const key = decodeEntity(components.UserDelegationControl.metadata.keySchema, entity);
+      const key = decodeEntity((components.UserDelegationControl.metadata as any)?.keySchema, entity);
 
       const { delegationControlId } = getComponentValueStrict(components.UserDelegationControl, entity);
 
@@ -586,6 +661,9 @@ export async function createNetworkLayer(config: NetworkConfig) {
       sendAnalyticsEvent,
 
       calculateMeanTxResponseTime,
+
+      getMatchRewards,
+      getMatchAccessDetails,
     },
     isBrowser,
   };

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.24;
 
 import "forge-std/Script.sol";
 import { StoreSwitch } from "@latticexyz/store/src/StoreSwitch.sol";
@@ -24,8 +24,8 @@ import { ResourceId, WorldResourceIdLib } from "@latticexyz/world/src/WorldResou
 
 import { IWorld } from "../src/codegen/world/IWorld.sol";
 import { createTemplates } from "../src/codegen/scripts/CreateTemplates.sol";
-import { SeasonTimes, Admin, SeasonPassConfig, SeasonPassLastSaleAt, SkyPoolConfig, VirtualLevelTemplates, LevelInStandardRotation, LevelInSeasonPassRotation, HeroInRotation, HeroInSeasonPassRotation, MatchRewardPercentages } from "../src/codegen/index.sol";
-import { GrassTemplateId, ForestTemplateId, MountainTemplateId, LavaGroundTemplateId, HalberdierTemplateId, DragoonTemplateId, MarksmanTemplateId } from "../src/codegen/Templates.sol";
+import { SeasonTimes, Admin, SeasonPassConfig, SeasonPassLastSaleAt, SkyPoolConfig, VirtualLevelTemplates, LevelInStandardRotation, LevelInSeasonPassRotation, HeroInRotation, HeroInSeasonPassRotation, MatchRewardPercentages, SeasonPassIndex } from "../src/codegen/index.sol";
+import { GrassTemplateId, ForestTemplateId, MountainTemplateId, GrassTemplateId, HalberdierTemplateId, DragoonTemplateId, MarksmanTemplateId } from "../src/codegen/Templates.sol";
 
 import { SeasonPassOnlySystem } from "../src/systems/SeasonPassOnlySystem.sol";
 import { addressToEntity } from "../src/libraries/LibUtils.sol";
@@ -33,11 +33,11 @@ import { NoTransferHook } from "../src/NoTransferHook.sol";
 
 import { createArchetypeModifiers } from "../src/libraries/LibArchetypes.sol";
 
-uint256 constant SEASON_PASS_STARTING_PRICE = 0.005 ether;
-uint256 constant SEASON_PASS_MIN_PRICE = 0.001 ether;
-uint256 constant SEASON_PASS_PRICE_DECREASE_PER_SECOND = 277_779; // loses roughly 240% value a day
+uint256 constant SEASON_PASS_STARTING_PRICE = 0.00000005 ether;
+uint256 constant SEASON_PASS_MIN_PRICE = 0.00000001 ether;
+uint256 constant SEASON_PASS_PRICE_DECREASE_PER_SECOND = 0;
 uint256 constant SEASON_PASS_PRICE_DECREASE_DENOMINATOR = 10_000_000_000;
-uint256 constant SEASON_PASS_PURCHASE_MULTIPLIER_PERCENT = 110;
+uint256 constant SEASON_PASS_PURCHASE_MULTIPLIER_PERCENT = 100;
 uint256 constant SEASON_PASS_MINT_DURATION = 3 days;
 uint256 constant SEASON_DURATION = 30 days;
 
@@ -95,13 +95,13 @@ contract PostDeploy is Script {
     VirtualLevelTemplates.set(GrassTemplateId, true);
     VirtualLevelTemplates.set(ForestTemplateId, true);
     VirtualLevelTemplates.set(MountainTemplateId, true);
-    VirtualLevelTemplates.set(LavaGroundTemplateId, true);
+    VirtualLevelTemplates.set(GrassTemplateId, true);
 
-    LevelInStandardRotation.set("Cauldron", true);
+    LevelInStandardRotation.set("Cauldron-2", true);
 
-    LevelInSeasonPassRotation.set("Aviary", true);
-    LevelInSeasonPassRotation.set("KnifeFight", true);
-    LevelInSeasonPassRotation.set("Antelope", true);
+    LevelInSeasonPassRotation.set("The Isle", true);
+    LevelInSeasonPassRotation.set("Knife_Fight_2", true);
+    LevelInSeasonPassRotation.set("Antelope 2", true);
 
     HeroInRotation.set(HalberdierTemplateId, true);
     HeroInSeasonPassRotation.set(DragoonTemplateId, true);
@@ -117,22 +117,22 @@ contract PostDeploy is Script {
       // Initialise tokens
       IERC20Mintable orbToken = registerERC20(
         world,
-        "Orb",
-        ERC20MetadataData({ decimals: 18, name: "Orb", symbol: unicode"🔮" })
+        "test_orb",
+        ERC20MetadataData({ decimals: 18, name: "test", symbol: "TEST" })
       );
       IERC721Mintable seasonPass = registerERC721(
         world,
-        "szn0.2",
-        ERC721MetadataData({ name: "Season Pass", symbol: unicode"🎫", baseURI: "" })
+        "test_season",
+        ERC721MetadataData({ name: "test_season_pass", symbol: "TEST", baseURI: "" })
       );
       IERC721Mintable skyKey = registerERC721(
         world,
-        "SkyKey",
-        ERC721MetadataData({ name: "Sky Key", symbol: unicode"🔑", baseURI: "" })
+        "test_sky_key",
+        ERC721MetadataData({ name: "test_sky_key", symbol: "TEST", baseURI: "" })
       );
 
       // Set SkyPool values
-      SkyPoolConfig.set(COST_CREATE_MATCH, WINDOW, address(orbToken), address(seasonPass), address(skyKey));
+      SkyPoolConfig.set(false, COST_CREATE_MATCH, WINDOW, address(orbToken), address(seasonPass), address(skyKey));
       SeasonPassConfig.set(
         SEASON_PASS_MIN_PRICE,
         SEASON_PASS_STARTING_PRICE,
@@ -148,6 +148,9 @@ contract PostDeploy is Script {
       // orbToken.mint(admin, 10_000 ether);
 
       skyKey.mint(admin, SKY_KEY_TOKEN_ID);
+
+      seasonPass.mint(admin, 0);
+      SeasonPassIndex.set(1);
     }
 
     // Deploy SeasonPassOnly Match access system in the MatchAccess namespace
@@ -158,15 +161,17 @@ contract PostDeploy is Script {
     });
     System systemContract = new SeasonPassOnlySystem();
 
+    ResourceId namespaceId = WorldResourceIdLib.encodeNamespace("MatchAccess");
+    world.registerNamespace(namespaceId);
     world.registerSystem(systemId, systemContract, true);
 
     NoTransferHook subscriber = new NoTransferHook();
 
     // Register the non-transferability hook
-    world.registerSystemHook(_erc721SystemId("szn0.2"), subscriber, BEFORE_CALL_SYSTEM);
+    world.registerSystemHook(_erc721SystemId("test_season"), subscriber, BEFORE_CALL_SYSTEM);
 
     // Transfer season pass namespace to World
-    ResourceId namespaceId = WorldResourceIdLib.encodeNamespace("szn0.2");
+    namespaceId = WorldResourceIdLib.encodeNamespace("test_season");
     world.transferOwnership(namespaceId, worldAddress);
 
     vm.stopBroadcast();

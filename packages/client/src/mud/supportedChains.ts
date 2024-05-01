@@ -4,14 +4,14 @@ type SkyStrifeChain = MUDChain & {
   indexerUrl?: string;
 };
 
-export const redstoneHolesky = {
-  id: 17001,
-  name: "Redstone Holesky",
-  network: "redstone-holesky",
+export const garnet = {
+  id: 17069,
+  name: "Redstone Garnet Testnet",
+  network: "garnet",
   summary: {
     location: "Holesky",
   },
-  description: "Redstone Holesky",
+  description: "Redstone Garnet Testnet",
   nativeCurrency: {
     decimals: 18,
     name: "Holesky Ether",
@@ -19,24 +19,53 @@ export const redstoneHolesky = {
   },
   rpcUrls: {
     default: {
-      http: ["https://rpc.holesky.redstone.xyz"],
-      webSocket: ["wss://rpc.holesky.redstone.xyz/ws"],
+      http: ["https://rpc.garnet.qry.live"],
+      webSocket: ["wss://rpc.garnet.qry.live"],
     },
     public: {
-      http: ["https://rpc.holesky.redstone.xyz"],
-      webSocket: ["wss://rpc.holesky.redstone.xyz/ws"],
+      http: ["https://rpc.garnet.qry.live"],
+      webSocket: ["wss://rpc.garnet.qry.live"],
     },
   },
   blockExplorers: {
     default: {
       name: "Blockscout",
-      url: "https://explorer.holesky.redstone.xyz",
+      url: "https://explorer.garnet.qry.live",
     },
   },
-  // faucetUrl: "https://17001-faucet.quarry.linfra.xyz/trpc",
+};
+
+export const redstone = {
+  id: 690,
+  name: "Redstone Mainnet",
+  network: "redstone",
+  summary: {
+    location: "ETH Mainnet",
+  },
+  description: "Redstone Mainnet",
+  nativeCurrency: {
+    decimals: 18,
+    name: "Ether",
+    symbol: "ETH",
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://rpc.redstonechain.com"],
+      webSocket: ["wss://rpc.redstonechain.com"],
+    },
+    public: {
+      http: ["https://rpc.redstonechain.com"],
+      webSocket: ["wss://rpc.redstonechain.com"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Blockscout",
+      url: "https://api.explorer.redstonechain.com",
+    },
+  },
   indexerUrl: "https://indexer.skystrife.xyz",
-  testnet: true,
 };
 
 // If you are deploying to chains other than anvil or Lattice testnet, add them here
-export const supportedChains: SkyStrifeChain[] = [mudFoundry, redstoneHolesky];
+export const supportedChains: SkyStrifeChain[] = [mudFoundry, garnet, redstone];

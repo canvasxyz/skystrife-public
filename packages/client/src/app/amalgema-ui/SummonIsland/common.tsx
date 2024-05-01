@@ -29,7 +29,7 @@ export function PercentageInput({
   setAmount?: (amount: bigint) => void;
 }) {
   return (
-    <div className={"relative w-full"}>
+    <div className="relative w-full">
       <input
         className={twMerge("w-full bg-ss-bg-2 px-4 py-2 border border-[#DDDAD0]", className)}
         type="text"
@@ -172,10 +172,10 @@ export function EthInput({
       </span>
 
       <input
-        className={twMerge("w-[100px] align-middle shrink text-right pr-3 bg-ss-bg-2", className)}
+        className={twMerge("w-[120px] align-middle shrink text-right pr-3 bg-ss-bg-2", className)}
         type="text"
         readOnly
-        value={parseFloat(formatEther(amount)).toFixed(3)}
+        value={parseFloat(formatEther(amount)).toFixed(5)}
       />
 
       <Body className="text-ss-text-default right-3">ETH</Body>

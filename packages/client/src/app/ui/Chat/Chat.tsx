@@ -10,6 +10,9 @@ import { Wallet } from "ethers";
 import { useCurrentTime } from "../../amalgema-ui/hooks/useCurrentTime";
 import { DateTime } from "luxon";
 import { useExternalAccount } from "../hooks/useExternalAccount";
+import { addressToEntityID } from "../../../mud/setupNetwork";
+import { BYTES32_ZERO } from "../../../constants";
+import useOnClickOutside from "../hooks/useOnClickOutside";
 import { getBurnerWallet } from "../../../mud/getBrowserNetworkConfig";
 import { ClickWrapper } from "../Theme/ClickWrapper";
 import { useAllPlayerDetails } from "../hooks/usePlayerDetails";
@@ -19,19 +22,20 @@ import { gcm } from '@noble/ciphers/aes';
 import { bytesToHex, hexToBytes, utf8ToBytes, bytesToUtf8 } from '@noble/ciphers/utils';
 import { randomBytes } from "@noble/hashes/utils";
 
-type Message = { 
-  id: string; 
-  address: string; 
-  content: string; 
+
+type Message = {
+  id: string;
+  address: string;
+  content: string;
   channel: string;
-  color: string; 
+  color: string;
   name: string;
   nonce: string;
   player: string;
-  timestamp: number 
+  timestamp: number
 };
 
-type Player = { 
+type Player = {
   id: string;
   address: string;
   key: string;
@@ -124,7 +128,7 @@ export function Chat() {
 
   /*
     We need to wait for Canvas to finish initializing and connecting to peers before we register encryption keys, so we wait for `app.status === 'connected'` before doing any loading stage operations
-  */ 
+  */
   useEffect(() => {
     if (!app || app.status !== 'connected' || initialized) {
       return;
@@ -138,7 +142,7 @@ export function Chat() {
       return (currentPlayer.player === player.player)
     });
 
-    // if not, create one 
+    // if not, create one
     if (!hasRegistrationKey) {
       app.actions.createPlayer({ key: publicKey, player: currentPlayer.player});
     }
@@ -147,12 +151,12 @@ export function Chat() {
 
   }, [app, app?.status, initialized, players])
 
-  /* 
+  /*
     We need to determine when another player has joined and is ready to start direct messaging. Two things here:
 
-    1) `playerData` shows that another user has joined the match 
+    1) `playerData` shows that another user has joined the match
     2) `players` shows that user has joined and registered an encryption key
-  */ 
+  */
   useEffect(() => {
     // if other player has been set already, return
     if (!!otherPlayer || !initialized) {
@@ -165,7 +169,7 @@ export function Chat() {
       return;
     }
 
-    // find pdPlayer's encryption key in the Canvas store 
+    // find pdPlayer's encryption key in the Canvas store
     const pPlayer = players?.find((c: Player) => c.player === pdPlayer.player);
 
     if (!pPlayer) {
@@ -183,7 +187,7 @@ export function Chat() {
 
   const now = useCurrentTime();
   const secondsVisibleAfterInteraction = 15;
-  const [lastInteraction, setLastInteraction] = useState(DateTime.now());
+  const [lastInteraction, setLastInteraction] = useState(DateTime.fromSeconds(0));
   const [inputFocused, setInputFocused] = useState(false);
 
   const focusInput = useCallback(() => {
@@ -192,6 +196,7 @@ export function Chat() {
     setInputFocused(true);
     setLastInteraction(DateTime.now());
   }, [disableMapInteraction]);
+
   const blurInput = useCallback(() => {
     if (!inputFocused) return;
 
@@ -203,6 +208,7 @@ export function Chat() {
 
   const [newMessage, setNewMessage] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  useOnClickOutside(inputRef, blurInput);
   const scrollIntoViewRef = useRef<HTMLDivElement>(null);
 
   const messages = useLiveQuery<Message>(app, "message", {
@@ -210,9 +216,11 @@ export function Chat() {
   });
 
   useEffect(() => {
+    if (app?.status !== "connected") return;
+
     setLastInteraction(DateTime.now());
     scrollIntoViewRef.current?.scrollIntoView();
-  }, [messages]);
+  }, [app?.status, messages]);
 
   useEffect(() => {
     if (lastInteraction.plus({ seconds: secondsVisibleAfterInteraction }).diff(now).milliseconds > 0) return;
@@ -243,7 +251,7 @@ export function Chat() {
       const nonce = randomBytes(24);
       const aesAlgo = gcm(aesKey, nonce);
       const ciphertext = aesAlgo.encrypt(utf8ToBytes(text));
-  
+
       return {
         ciphertext: bytesToHex(ciphertext),
         nonce: bytesToHex(nonce)
@@ -263,7 +271,7 @@ export function Chat() {
 
     try {
       const sharedSecret = secp256k1.getSharedSecret(privKey.slice(2), recipientKey.slice(2));
-  
+
       const aesKey = sha256(sharedSecret);
       const aesAlgo = gcm(aesKey, hexToBytes(nonce));
       const plaintext = aesAlgo.decrypt(hexToBytes(ciphertext));
@@ -288,7 +296,7 @@ export function Chat() {
       try {
         setNewMessage("");
         blurInput();
-  
+
         await app.actions.createMessage({
           content: newMessage,
           name,
@@ -301,8 +309,8 @@ export function Chat() {
       } catch (err) {
         console.error(err);
       }
-    } 
-    
+    }
+
     if (channel === CHANNELS.PLAYER) {
       if (!otherPlayer) {
         return;
@@ -317,7 +325,7 @@ export function Chat() {
       try {
         setNewMessage("");
         blurInput();
-  
+
         await app.actions.createMessage({
           content: encryptedText.ciphertext,
           nonce: encryptedText.nonce,
@@ -367,10 +375,10 @@ export function Chat() {
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [blurInput, focusInput, otherPlayer]);
+  }, [blurInput, focusInput, otherPlayer, app?.status]);
 
   const availableChannels = [
-    CHANNELS.ALL, 
+    CHANNELS.ALL,
     ...(otherPlayer ? [CHANNELS.PLAYER] : [])
   ];
 
@@ -386,6 +394,21 @@ export function Chat() {
 
     return '';
   }
+
+  const allMessages = messages ?? [];
+  useEffect(() => {
+    if (app?.status === "connected" && allMessages.length === 0) {
+      allMessages.unshift({
+        id: "0",
+        color: "white",
+        name: "System",
+        content: "Welcome to Sky Strife! Press enter to chat.",
+        address: "0x0",
+        timestamp: 0,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app, app?.status]);
 
   return (
     <div
@@ -411,7 +434,7 @@ export function Chat() {
         ))}
       </ChannelTabs>
       <div className="h-full w-full">
-        <div className="w-full overflow-y-auto">
+        <div className="w-full overflow-hidden">
           <ul
             style={{
               overflowAnchor: "none",
@@ -442,7 +465,7 @@ export function Chat() {
                     overflowWrap: "anywhere",
                   }}
                   key={message.id}
-                  className="flex text-white items-baseline flex-wrap space-x-1 w-full"
+                  className="flex text-white items-baseline flex-wrap space-x-1 w-full whitespace-normal break-words"
                 >
                   <span
                     style={{
@@ -492,9 +515,13 @@ export function Chat() {
             type="text"
             className={getInputClass()}
             value={newMessage}
-            placeholder="Type a message"
-            onChange={(e) => setNewMessage(e.target.value)}
-            disabled={!app || app.status !== "connected"}
+            placeholder={app?.status === "connected" ? "Press enter to chat" : "Connecting..."}
+            onChange={(e) => {
+              if (app?.status !== "connected") return;
+
+              setNewMessage(e.target.value);
+            }}
+            disabled={!app}
           />
           {inputFocused &&
             (app?.status === "connected" ? (
@@ -525,4 +552,3 @@ const ChannelTab = styled.button`
 
   width: 100%;
 `;
-
