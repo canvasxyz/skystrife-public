@@ -1,0 +1,16 @@
+app = "skystrife-indexer"
+kill_signal = "SIGINT"
+kill_timeout = 30
+processes = []
+
+[[vm]]
+  memory = "2gb"
+
+[[services]]
+  internal_port = 8000
+  processes = ["app"]
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 8000
