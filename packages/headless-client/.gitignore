@@ -4,3 +4,5 @@ wallets/*.txt
 !wallets/.KEEP
 output/*.txt
 .env
+app/*
+data/*
