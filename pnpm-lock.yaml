@@ -172,6 +172,15 @@ importers:
       '@libp2p/multistream-select':
         specifier: 4.0.9
         version: 4.0.9
+      '@noble/ciphers':
+        specifier: 0.5.1
+        version: 0.5.1
+      '@noble/hashes':
+        specifier: 1.4.0
+        version: 1.4.0
+      '@noble/secp256k1':
+        specifier: 2.0.0
+        version: 2.0.0
       '@protobuf-ts/grpcweb-transport':
         specifier: ^2.9.1
         version: 2.9.1
@@ -4471,6 +4480,10 @@ packages:
     resolution: {integrity: sha512-xaUaUUDWbHIFSxaQ/pIe+33VG2mfJp6N/KxKLmZr5biWdNznCAmfu24QRhX10BbVAuqOahAoyp0S4M9md6GPDw==}
     dev: false
 
+  /@noble/ciphers@0.5.1:
+    resolution: {integrity: sha512-aNE06lbe36ifvMbbWvmmF/8jx6EQPu2HVg70V95T+iGjOuYwPpAccwAQc2HlXO2D0aiQ3zavbMga4jjWnrpiPA==}
+    dev: false
+
   /@noble/curves@1.2.0:
     resolution: {integrity: sha512-oYclrNgRaM9SsBUBVbb8M6DTV7ZHRTKugureoYEncY5c65HOmRzvSiTE3y5CYaPYJA/GVkrhXEoF0M3Ya9PMnw==}
     dependencies:
@@ -4499,6 +4512,10 @@ packages:
   /@noble/hashes@1.4.0:
     resolution: {integrity: sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==}
     engines: {node: '>= 16'}
+    dev: false
+
+  /@noble/secp256k1@2.0.0:
+    resolution: {integrity: sha512-rUGBd95e2a45rlmFTqQJYEFA4/gdIARFfuTuTqLglz0PZ6AKyzyXsEZZq7UZn8hZsvaBgpCzKKBJizT2cJERXw==}
     dev: false
 
   /@nodelib/fs.scandir@2.1.5:
