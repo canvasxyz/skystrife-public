@@ -1,6 +1,9 @@
 import { defineWorld } from "@latticexyz/world";
 
 export default defineWorld({
+  deploy: {
+    upgradeableWorldImplementation: true,
+  },
   codegen: {
     outputDirectory: "codegen",
   },
@@ -481,7 +484,7 @@ export default defineWorld({
     /**
      * SkyPool settings:
      * - Creation cost of SkyPool matches.
-     * - Window (in blocks) to determine match rewards.
+     * - Window (in seconds) to determine match rewards.
      * - Token that is used in SkyPool rewards.
      */
     SkyPoolConfig: {

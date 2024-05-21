@@ -1,6 +1,6 @@
-import { useComponentValue, useEntityQuery } from "@latticexyz/react";
-import { Entity, Has, HasValue, getComponentValue, runQuery } from "@latticexyz/recs";
-import { useMemo, useState } from "react";
+import { useComponentValue } from "@latticexyz/react";
+import { Entity, HasValue, getComponentValue, runQuery } from "@latticexyz/recs";
+import { useEffect, useMemo, useState } from "react";
 import { useAmalgema } from "../../../useAmalgema";
 import { Hex, formatEther, hexToString } from "viem";
 import { Modal } from "../Modal";
@@ -11,7 +11,7 @@ import { SessionWalletManager } from "../SessionWalletManager";
 import { Link, OverlineSmall } from "../../ui/Theme/SkyStrife/Typography";
 import { OrbInput, ReadOnlyTextInput } from "../SummonIsland/common";
 import { getMatchUrl } from "../../../getMatchUrl";
-import { LevelDisplay } from "../SummonIsland/LevelDisplay";
+import { MapDisplay } from "../SummonIsland/MapDisplay";
 import { useAccessList } from "../hooks/useAccessList";
 import { addressToEntityID } from "../../../mud/setupNetwork";
 import { DisplayNameWithLink } from "../CreatedBy";
@@ -33,10 +33,14 @@ export function JoinModal({
   matchEntity,
   children,
   viewOnly,
+  isOpen,
+  setIsOpen,
 }: {
   matchEntity: Entity;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   viewOnly?: boolean;
+  isOpen?: boolean;
+  setIsOpen?: (o: boolean) => void;
 }) {
   const {
     network: {
@@ -46,10 +50,14 @@ export function JoinModal({
     utils: { getMatchRewards },
   } = useAmalgema();
 
-  const freeHero = [...runQuery([HasValue(HeroInRotation, { value: true })])][0];
-  const [hero, setHero] = useState(freeHero);
+  const [hero, setHero] = useState<Hex | null>(null);
   const [previewLevel, setPreviewLevel] = useState(false);
   const [showAccessList, setShowAccessList] = useState(false);
+
+  useEffect(() => {
+    const freeHero = [...runQuery([HasValue(HeroInRotation, { value: true })])][0];
+    setHero(freeHero as Hex);
+  }, [isOpen, HeroInRotation]);
 
   const { totalRewards, sweepstakeRewards } = getMatchRewards(matchEntity);
   const allowedAccounts = useAccessList(matchEntity);
@@ -77,7 +85,7 @@ export function JoinModal({
   if (hasAllowList) matchTypeString = "Private";
   else if (isSeasonPassOnly) matchTypeString = "Season Pass Only";
 
-  const joinMatch = useJoinMatch(matchEntity, hero);
+  const joinMatch = useJoinMatch(matchEntity, hero as Hex);
 
   const { address } = useExternalAccount();
   const allPlayersInMatch = useComponentValue(MatchPlayers, matchEntity)?.value ?? [];
@@ -97,8 +105,16 @@ export function JoinModal({
 
   const burnerBalance = useBurnerBalance();
 
+  let openParams = {};
+  if (setIsOpen)
+    openParams = {
+      isOpen,
+      setOpen: setIsOpen,
+    };
+
   return (
     <Modal
+      {...openParams}
       trigger={children}
       title={`${matchInfo.matchName}`}
       footer={
@@ -136,13 +152,13 @@ export function JoinModal({
       }
     >
       <div className="flex flex-col justify-around">
-        {!viewOnly && burnerBalance.belowMinimum && (
+        {!viewOnly && burnerBalance.danger && (
           <>
             <SessionWalletManager /> <div className="h-4" />
           </>
         )}
 
-        {!viewOnly && matchJoinable && (
+        {!viewOnly && matchJoinable && hero && (
           <>
             <HeroSelect hero={hero} setHero={setHero} />
             <div className="h-4" />
@@ -199,7 +215,7 @@ export function JoinModal({
         {previewLevel && (
           <>
             <div className="h-4" />
-            <LevelDisplay levelId={matchConfig?.levelId ?? "0x"} />
+            <MapDisplay levelId={matchConfig?.levelId ?? "0x"} />
           </>
         )}
 

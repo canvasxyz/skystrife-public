@@ -62,36 +62,32 @@ function dispenseRewards(bytes32 matchEntity) {
 function getReward(uint256 numberOfMatches) view returns (uint256) {
   uint256 cost = SkyPoolConfig.getCost();
 
-  if (numberOfMatches < 200) {
-    return 5 * cost;
-  } else if (numberOfMatches < 400) {
-    return 4 * cost;
-  } else if (numberOfMatches < 600) {
-    return 3 * cost;
+  if (numberOfMatches < 300) {
+    return cost * 3;
+  } else if (numberOfMatches < 500) {
+    return cost * 2;
   } else if (numberOfMatches < 800) {
-    return 2 * cost;
+    return (cost * 150) / 100;
   } else if (numberOfMatches < 1000) {
-    return cost;
+    return (cost * 120) / 100;
   } else if (numberOfMatches < 1200) {
-    return (4 * cost) / 5;
+    return cost;
   } else if (numberOfMatches < 1400) {
-    return (3 * cost) / 5;
-  } else if (numberOfMatches < 1600) {
-    return (2 * cost) / 5;
-  } else if (numberOfMatches < 1800) {
-    return (1 * cost) / 5;
+    return (cost * 90) / 100;
+  } else if (numberOfMatches < 1700) {
+    return (cost * 75) / 100;
   } else if (numberOfMatches < 2000) {
-    return (1 * cost) / 10;
+    return (cost * 60) / 100;
+  } else {
+    return (cost * 50) / 100;
   }
-
-  return 0;
 }
 
 function getStartTimeOfWindow(uint256 window) view returns (uint256) {
-  uint256 currentBlock = block.timestamp;
-  uint256 startBlock = currentBlock > window ? currentBlock - window : 0;
+  uint256 currentTime = block.timestamp;
+  uint256 startTime = currentTime > window ? currentTime - window : 0;
 
-  return startBlock;
+  return startTime;
 }
 
 function previousMatchIsBeforeTime(uint32 matchIndex, uint256 timestamp) view returns (bool) {

@@ -3,6 +3,7 @@ import { Client, Events, GatewayIntentBits, TextChannel } from "discord.js";
 import { createSkyStrife } from "headless-client/src/createSkyStrife";
 import { createMatchUpdater } from "./createMatchUpdater";
 import { createSeasonPassNotifier } from "./createSeasonPassNotifier";
+import { announceUpcomingScheduledMatches } from "./announceUpcomingScheduledMatches";
 
 const skyStrife = await createSkyStrife();
 
@@ -33,6 +34,10 @@ client.once(Events.ClientReady, (readyClient) => {
     if (message.author.bot) return;
     if (!message.guild) return;
     if (!message.member) return;
+
+    if (message.content.includes("!wenplay")) {
+      announceUpcomingScheduledMatches(skyStrife.networkLayer, message);
+    }
 
     if (message.content.includes("!join")) {
       try {

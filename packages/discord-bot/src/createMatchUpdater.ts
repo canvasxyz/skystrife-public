@@ -12,7 +12,7 @@ import { createSkyStrife } from "headless-client/src/createSkyStrife";
 import { MATCHMAKING_ROLE } from ".";
 import { DateTime } from "luxon";
 
-const url = process.env.CHAIN_ID === "17001" ? "https://playtest.skystrife.xyz" : "http://localhost:1337";
+const url = process.env.CHAIN_ID === "690" ? "https://play.skystrife.xyz" : "http://localhost:1337";
 
 /**
  * Update match notification messages in the notification channel
@@ -25,7 +25,7 @@ export const createMatchUpdater = async (
   const {
     networkLayer: {
       world,
-      components: { MatchConfig, MatchName, MatchPlayers, Name, MatchFinished },
+      components: { MatchConfig, MatchName, MatchPlayers, Name, MatchFinished, CreatedByAddress },
       utils: { getMaxPlayers, getMatchRewards, getMatchAccessDetails },
     },
     headlessLayer: {
@@ -116,12 +116,12 @@ ${lodash
     if (!player) return `- Player ${i + 1}: Empty`;
 
     const playerEntity = encodeMatchEntity(entity, player);
-    const playerDetails = getPlayerInfo(playerEntity);
-    if (!playerDetails) return `- Player ${i + 1}: Empty`;
+    const playerOwner = getComponentValue(CreatedByAddress, playerEntity)?.value;
+    if (!playerOwner) return `- Player ${i + 1}: Empty`;
 
-    const { name } = playerDetails;
+    const name = getComponentValue(Name, playerOwner as Entity)?.value;
 
-    return `- Player ${i + 1}: ${name ? `**${name}**` : "Empty"}`;
+    return `- Player ${i + 1}: ${name ? `**${name}**` : `${toEthAddress(playerOwner).slice(0, 10)}...`}`;
   })
   .join("\n")}`;
 
